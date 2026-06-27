@@ -38,7 +38,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
 
   const updateUsername = (name: string) => setUsername(name);
 
-  return <UserContext value={{isLoggedIn,isPremium,username,favorites,login,logout,togglePremium,toggleFavorite,updateUsername}}>{children}</UserContext>;
+  return (
+    <UserContext.Provider value={{ isLoggedIn, isPremium, username, favorites, login, logout, togglePremium, toggleFavorite, updateUsername }}>
+      {children}
+    </UserContext.Provider>
+  );
 }
 
 export function useAppUser() {

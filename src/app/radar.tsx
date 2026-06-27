@@ -1,27 +1,50 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '@/context/theme-context';
-import { useAppUser } from '@/context/user-context'; // 🚀 引入会员判断
+import { useAppUser } from '@/context/user-context';
 import { mockRadarList } from '@/constants/mock-stock';
 import { useTranslation } from 'react-i18next';
+import Svg, { Path } from 'react-native-svg';
+
+// 🌟 引入独立封装的统一登录组件
+import { LoginModal } from '@/components/login-modal';
 
 export default function RadarScreen() {
   const { t } = useTranslation();
   const { colors } = useAppTheme();
-  const { isPremium } = useAppUser(); // 🚀 获取会员状态
+  const { isPremium, isLoggedIn } = useAppUser(); 
   const router = useRouter();
 
-  // 🔒 核心变现逻辑：非会员强行限制前5条展示 (这里我们的Mock数组较短，但逻辑完全打通)
-  const displayData = isPremium ? mockRadarList : mockRadarList.slice(0, 2); 
+  // 控制雷达页自己的登录弹窗状态
+  const [loginModalVisible, setLoginModalVisible] = useState(false);
+
+  const hasAccess = isLoggedIn && isPremium;
+  const displayData = hasAccess ? mockRadarList : mockRadarList.slice(0, 2); 
+
+  const handleBottomAction = () => {
+      if (!isLoggedIn) {
+          // 🌟 唤起精美的全局复用登录组件
+          setLoginModalVisible(true);
+      } else {
+          router.push('/profile');
+      }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={colors.statusBarStyle} />
       
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '700' }}>◀</Text>
+        <TouchableOpacity 
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            style={[styles.backCapsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+        >
+            <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <Path d="M15 19L8 12L15 5" stroke={colors.textPrimary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.textPrimary }]}>{t('radarTitle')}</Text>
       </View>
@@ -31,13 +54,26 @@ export default function RadarScreen() {
         keyExtractor={(item) => item.ticker}
         contentContainerStyle={styles.listContainer}
         ListFooterComponent={() => (
-          // 🔒 核心改动：非会员在页尾弹出充值引流文案
-          !isPremium ? (
-            <View style={[styles.premiumNoticeBox, { backgroundColor: '#FFD70015', borderColor: '#FFD700' }]}>
-              <Text style={[styles.noticeText, { color: colors.textPrimary }]}>⚠️ {t('premiumNotice')}</Text>
-              <TouchableOpacity style={styles.upgradeInlineBtn} onPress={() => router.push('/profile')}>
-                <Text style={styles.upgradeInlineText}>{t('upgradeBtn')}</Text>
-              </TouchableOpacity>
+          !hasAccess ? (
+            <View style={[styles.premiumCapsule, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.premiumLeft}>
+                    <Text style={[styles.premiumTitle, { color: colors.textPrimary }]}>
+                        {isLoggedIn ? t('premiumTitle') : `🔐 ${t('loginEntry')}`}
+                    </Text>
+                    <Text style={[styles.premiumSub, { color: colors.textSecondary }]}>
+                        {isLoggedIn ? t('premiumNotice') : t('loginSubtitle')}
+                    </Text>
+                </View>
+                
+                <TouchableOpacity 
+                    style={[styles.premiumBadge, { backgroundColor: colors.textPrimary }]} 
+                    onPress={handleBottomAction}
+                    activeOpacity={0.8}
+                >
+                    <Text style={[styles.premiumBadgeText, { color: colors.background }]}>
+                        {isLoggedIn ? t('upgradeBtn') : t('loginEntry')}
+                    </Text>
+                </TouchableOpacity>
             </View>
           ) : null
         )}
@@ -59,14 +95,21 @@ export default function RadarScreen() {
           </TouchableOpacity>
         )}
       />
+
+      {/* 🌟 渲染复用的登录组件 */}
+      <LoginModal 
+        visible={loginModalVisible} 
+        onClose={() => setLoginModalVisible(false)} 
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 60 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20, gap: 15 },
-  title: { fontSize: 18, fontWeight: '900' },
+  container: { flex: 1, paddingTop: 4 }, 
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginVertical: 8, gap: 15 },
+  backCapsule: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 1, elevation: 1 },
+  title: { fontSize: 16, fontWeight: '800' },
   listContainer: { paddingHorizontal: 20, gap: 10, paddingBottom: 40 },
   stripCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 12, borderWidth: 1 },
   leftCol: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 0.65 },
@@ -76,10 +119,10 @@ const styles = StyleSheet.create({
   rightCol: { alignItems: 'flex-end', flex: 0.35 },
   priceText: { fontSize: 15, fontWeight: '900', fontFamily: 'monospace' },
   changeText: { fontSize: 12, fontWeight: '700', marginTop: 2 },
-  
-  // 充值引流卡片样式
-  premiumNoticeBox: { marginTop: 20, padding: 16, borderRadius: 12, borderWidth: 1, alignItems: 'center', gap: 12 },
-  noticeText: { fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 16 },
-  upgradeInlineBtn: { backgroundColor: '#FFD700', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  upgradeInlineText: { color: '#000', fontSize: 11, fontWeight: '900' }
+  premiumCapsule: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 14, padding: 16, borderWidth: 1, marginTop: 10 },
+  premiumLeft: { flex: 1, gap: 4, paddingRight: 10 },
+  premiumTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
+  premiumSub: { fontSize: 10, fontWeight: '500', lineHeight: 14 },
+  premiumBadge: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  premiumBadgeText: { fontSize: 10, fontWeight: '900' }
 });

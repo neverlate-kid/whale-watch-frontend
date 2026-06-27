@@ -25,6 +25,9 @@ export default function HomeScreen() {
   const todayDate = dayjs().format('YYYY-MM-DD');
   const stockList = Object.values(mockStockData);
 
+  // 🌟 核心修复：收束真实权限判断逻辑
+  const hasAccess = isLoggedIn && isPremium;
+
   const showToast = (message: string) => {
     setToastMessage(message);
     Animated.sequence([
@@ -35,59 +38,45 @@ export default function HomeScreen() {
   };
 
   const handleFavoriteClick = (ticker: string) => {
-    const isCurrentlyFav = favorites.includes(ticker);
-
+    // 🌟 核心修复：优先拦截未登录用户
+    if (!isLoggedIn) {
+      showToast(`🔐 ${t('loginRequired')}`);
+      return;
+    }
+    // 其次拦截非会员
     if (!isPremium) {
       showToast(`🔒 ${t('memberExclusive')}`);
       return;
     }
-
+    
+    const isCurrentlyFav = favorites.includes(ticker);
     toggleFavorite(ticker);
-    if (isCurrentlyFav) {
-      showToast(`💎 已取消收藏 ${ticker}`);
-    } else {
-      showToast(`✨ 钻石已点亮！成功收藏 ${ticker}`);
-    }
+    showToast(isCurrentlyFav ? t('favRemoved', { ticker }) : t('favAdded', { ticker }));
   };
 
   const getDiamondConfig = (ticker: string) => {
     const isFav = favorites.includes(ticker);
-
-    if (!isLoggedIn || !isPremium) {
-      return { style: { opacity: 0.25, filter: 'grayscale(100%)' } as any };
-    }
-
-    if (isFav) {
-      return { style: { opacity: 1.0, transform: [{ scale: 1.15 }] } };
-    }
-
-    return { style: { opacity: 0.5, filter: 'grayscale(100%)' } as any };
+    // 🌟 核心修复：依据真实的 hasAccess 渲染状态
+    if (!hasAccess) return { style: { opacity: 0.25, filter: 'grayscale(100%)' } as any };
+    return isFav ? { style: { opacity: 1.0, transform: [{ scale: 1.15 }] } } : { style: { opacity: 0.5, filter: 'grayscale(100%)' } as any };
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={colors.statusBarStyle} />
 
-      {/* 品牌标题 + 日期 */}
-      <View style={styles.titleBar}>
-        <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>{t('brand')}</Text>
-        <Text style={[styles.dateBadge, { color: colors.textSecondary }]}>📅 {todayDate}</Text>
+      <View style={[styles.titleBar, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+        <View>
+          <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>{t('brand')}</Text>
+          <Text style={[styles.dateBadge, { color: colors.textSecondary }]}>📅 {todayDate}</Text>
+        </View>
       </View>
 
-      {/* 轮播卡片 */}
       <View style={styles.carouselContainer}>
-        <ScrollView
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={SCREEN_WIDTH - 40}
-          decelerationRate="fast"
-          contentContainerStyle={styles.scrollContent}
-        >
+        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={SCREEN_WIDTH - 40} decelerationRate="fast" contentContainerStyle={styles.scrollContent}>
           {stockList.map((stock) => {
             const chartData = period === '1Y' ? stock.daily_data_1y : stock.weekly_data_10y;
             const diamondConfig = getDiamondConfig(stock.ticker);
-
             return (
               <View key={stock.ticker} style={[styles.mainCard, { backgroundColor: colors.card, borderColor: colors.border, width: SCREEN_WIDTH - 50 }]}>
                 <View style={styles.tickerRow}>
@@ -96,41 +85,20 @@ export default function HomeScreen() {
                     <Text style={[{ fontSize: 22 }, diamondConfig.style]}>💎</Text>
                   </TouchableOpacity>
                 </View>
-
                 <Text style={[styles.stockName, { color: colors.textPrimary }]}>{t(stock.nameKey)}</Text>
-
                 <View style={styles.priceContainer}>
                   <Text style={[styles.priceValue, { color: colors.textPrimary }]}>¥{stock.price.toLocaleString()}</Text>
                   <Text style={[styles.changeValue, { color: stock.isUp ? '#30D158' : '#FF453A' }]}>{stock.change}</Text>
                 </View>
-
                 <View style={styles.chartWrapper}>
-                  <StockChart
-                    data={chartData}
-                    color={stock.isUp ? '#30D158' : '#FF453A'}
-                    textColor={colors.textSecondary}
-                    borderColor={colors.border}
-                    timeZoneMode={timeZoneMode}
-                    onTimeZoneChange={(mode) => setTimeZoneMode(mode)}
-                  />
+                  <StockChart data={chartData} color={stock.isUp ? '#30D158' : '#FF453A'} textColor={colors.textSecondary} borderColor={colors.border} timeZoneMode={timeZoneMode} onTimeZoneChange={(mode) => setTimeZoneMode(mode)} />
                 </View>
-
                 <View style={[styles.tabBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                  <TouchableOpacity
-                    style={[styles.tabButton, period === '1Y' && { backgroundColor: theme === 'dark' ? colors.textPrimary : '#1C1C1E' }]}
-                    onPress={() => setPeriod('1Y')}
-                  >
-                    <Text style={[styles.tabText, { color: period === '1Y' ? (theme === 'dark' ? '#0A0A0C' : '#FFFFFF') : colors.textSecondary }]}>
-                      {t('periodDaily')}
-                    </Text>
+                  <TouchableOpacity style={[styles.tabButton, period === '1Y' && { backgroundColor: theme === 'dark' ? colors.textPrimary : '#1C1C1E' }]} onPress={() => setPeriod('1Y')}>
+                    <Text style={[styles.tabText, { color: period === '1Y' ? (theme === 'dark' ? '#0A0A0C' : '#FFFFFF') : colors.textSecondary }]}>{t('periodDaily')}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.tabButton, period === '10Y' && { backgroundColor: theme === 'dark' ? colors.textPrimary : '#1C1C1E' }]}
-                    onPress={() => setPeriod('10Y')}
-                  >
-                    <Text style={[styles.tabText, { color: period === '10Y' ? (theme === 'dark' ? '#0A0A0C' : '#FFFFFF') : colors.textSecondary }]}>
-                      {t('periodWeekly')}
-                    </Text>
+                  <TouchableOpacity style={[styles.tabButton, period === '10Y' && { backgroundColor: theme === 'dark' ? colors.textPrimary : '#1C1C1E' }]} onPress={() => setPeriod('10Y')}>
+                    <Text style={[styles.tabText, { color: period === '10Y' ? (theme === 'dark' ? '#0A0A0C' : '#FFFFFF') : colors.textSecondary }]}>{t('periodWeekly')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -139,18 +107,11 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
-      <TouchableOpacity
-        style={[styles.primaryButton, { backgroundColor: colors.buttonBg, borderColor: colors.buttonBorder }]}
-        activeOpacity={0.8}
-        onPress={() => router.push('/radar')}
-      >
+      <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.buttonBg, borderColor: colors.buttonBorder }]} activeOpacity={0.8} onPress={() => router.push('/radar')}>
         <Text style={[styles.buttonText, { color: colors.buttonText }]}>{t('radarButton')}</Text>
       </TouchableOpacity>
 
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.floatingToast, { opacity: toastOpacity, backgroundColor: theme === 'dark' ? '#FFFFFF' : '#1C1C1E' }]}
-      >
+      <Animated.View pointerEvents="none" style={[styles.floatingToast, { opacity: toastOpacity, backgroundColor: theme === 'dark' ? '#FFFFFF' : '#1C1C1E' }]}>
         <Text style={[styles.toastText, { color: theme === 'dark' ? '#0A0A0C' : '#FFFFFF' }]}>{toastMessage}</Text>
       </Animated.View>
     </View>
