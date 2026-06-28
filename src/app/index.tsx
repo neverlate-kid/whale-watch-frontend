@@ -17,34 +17,58 @@ export default function HomeScreen() {
   const router = useRouter();
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
   const [period, setPeriod] = useState<'1Y' | '10Y'>('1Y');
+  
   // 核心状态
   const [topMovers, setTopMovers] = useState<any[]>([]); // 存放 API 数据
-  const [isLoading, setIsLoading] = useState(true); // 👈 必须初始化为 true
+  const [isLoading, setIsLoading] = useState(true); 
   const [toastMessage, setToastMessage] = useState('');
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const todayDate = dayjs().format('YYYY-MM-DD');
+  
   // 🌟 核心修复：收束真实权限判断逻辑
   const hasAccess = isLoggedIn && isPremium;
 
   useEffect(() => {
     const fetchStocks = async () => {
-      setIsLoading(true); // 确保开始加载时为 true
+      setIsLoading(true);
       try {
         const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+        
+        // 1. 获取轻量级全量列表 (剔除了庞大K线以确保秒开)
         const response = await fetch(`${baseUrl}/api/v1/stocks`);
         const json = await response.json();
 
         if (json.success && Array.isArray(json.data)) {
-          // 在前端取异动最大的前3名
+          // 2. 在前端取异动最大的前3名（此时只有 price/change 等基础信息）
           const sorted = [...json.data]
             .sort((a: any, b: any) => b.volatility_score - a.volatility_score)
             .slice(0, 3);
-          setTopMovers(sorted);
+          
+          // 3. 核心修复：针对选出的前3名，并发请求获取详细数据（包含 daily_data_1y 和 weekly_data_10y）
+          const detailedMovers = await Promise.all(
+            sorted.map(async (stockItem: any) => {
+              try {
+                const detailResponse = await fetch(`${baseUrl}/api/v1/stocks/${stockItem.ticker}`);
+                const detailJson = await detailResponse.json();
+                if (detailJson.success) {
+                  // 将轻量级接口中的计算字段（如 isUp, change）与详情接口中的全量 K 线数组合并
+                  return { ...stockItem, ...detailJson.data };
+                }
+                return stockItem;
+              } catch (e) {
+                console.error(`加载 ${stockItem.ticker} 详细数据失败:`, e);
+                return stockItem; // 请求失败时退回使用轻量数据
+              }
+            })
+          );
+          
+          // 4. 将合并后的完整数据写入状态
+          setTopMovers(detailedMovers);
         }
       } catch (error) {
         console.error("加载数据失败:", error);
       } finally {
-        setIsLoading(false); // 👈 无论成功与否，必须设为 false
+        setIsLoading(false);
       }
     };
     fetchStocks();
@@ -106,6 +130,7 @@ export default function HomeScreen() {
       <View style={styles.carouselContainer}>
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={SCREEN_WIDTH - 40} decelerationRate="fast" contentContainerStyle={styles.scrollContent}>
           {topMovers.map((stock) => {
+            // 合并数据后，这里就可以安全地拿到 daily_data_1y 或 weekly_data_10y
             const chartData = period === '1Y' ? stock.daily_data_1y : stock.weekly_data_10y;
             const diamondConfig = getDiamondConfig(stock.ticker);
             return (
@@ -128,7 +153,12 @@ export default function HomeScreen() {
                   <Text style={[styles.changeValue, { color: stock.isUp ? '#30D158' : '#FF453A' }]}>{stock.change}</Text>
                 </View>
                 <View style={styles.chartWrapper}>
-                  <StockChart ticker={stock.ticker} data={chartData} color={stock.isUp ? '#30D158' : '#FF453A'} textColor={colors.textSecondary} borderColor={colors.border} timeZoneMode={timeZoneMode} onTimeZoneChange={(mode) => setTimeZoneMode(mode)} />
+                  {/* 给渲染图表增加一层容错，如果详情数据没拉到就显示菊花圈 */}
+                  {chartData ? (
+                    <StockChart ticker={stock.ticker} data={chartData} color={stock.isUp ? '#30D158' : '#FF453A'} textColor={colors.textSecondary} borderColor={colors.border} timeZoneMode={timeZoneMode} onTimeZoneChange={(mode) => setTimeZoneMode(mode)} />
+                  ) : (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  )}
                 </View>
                 <View style={[styles.tabBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   <TouchableOpacity style={[styles.tabButton, period === '1Y' && { backgroundColor: theme === 'dark' ? colors.textPrimary : '#1C1C1E' }]} onPress={() => setPeriod('1Y')}>

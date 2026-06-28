@@ -108,7 +108,7 @@ export function StockChart({ ticker, data, color, textColor, borderColor, timeZo
             {ticker}
           </Text>
           <Text style={[styles.statusText, { color: activePoint ? color : textColor }]}>
-            ● {activePoint ? 'LOCKED' : t('latest')}
+            ● {activePoint ? t('statusLocked') : t('latest')}
           </Text>
           <Text style={[styles.volumeText, { color: textColor }]}>
             {t('volume')}: {displayPoint.volume.toLocaleString()}
