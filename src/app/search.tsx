@@ -21,7 +21,7 @@ export default function SearchScreen() {
       setIsLoading(true);
       try {
         // 请求后端的全量轻量级列表
-        const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+        const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
         const response = await fetch(`${baseUrl}/api/v1/stocks`);
         const json = await response.json();
 
