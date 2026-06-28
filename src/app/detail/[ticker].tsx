@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DetailScreen() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { ticker } = useLocalSearchParams<{ ticker: string }>();
   const { colors } = useAppTheme();
   const router = useRouter();
@@ -31,7 +31,7 @@ export default function DetailScreen() {
           setStock(json.data);
         }
       } catch (e) {
-        console.error("加载股票详情失败:", e);
+        console.error("Failed loading stock information:", e);
       } finally {
         setIsLoading(false);
       }
@@ -52,7 +52,7 @@ export default function DetailScreen() {
   if (!stock) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.textSecondary }}>无法加载股票数据</Text>
+        <Text style={{ color: colors.textSecondary }}>{t('stockLoadError')}</Text>
       </View>
     );
   }
@@ -93,7 +93,7 @@ export default function DetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 50 },
+  container: { flex: 1, paddingTop: 4 },
   header: { paddingHorizontal: 20, marginBottom: 15 },
   title: { fontSize: 20, fontWeight: '800' },
   scrollBody: { paddingBottom: 40 },

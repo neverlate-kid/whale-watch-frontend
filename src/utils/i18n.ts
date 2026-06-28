@@ -105,6 +105,7 @@ const resources = {
 
       searchPlaceholder: "搜索代码、名称或状态(涨/跌)...",
       searchPrefix: "您正在搜索词条:",
+      stockLoadError: "无法加载股票数据",
     }
   },
   en: {
@@ -204,6 +205,7 @@ const resources = {
 
       searchPlaceholder: "Search ticker, name, or status (up/down)...",
       searchPrefix: "Searching for term:",
+      stockLoadError: "Failed to load stock data",
     }
   },
   ja: {
@@ -303,6 +305,7 @@ const resources = {
 
       searchPlaceholder: "銘柄コード、名称、または状態(上昇/下落)で検索...",
       searchPrefix: "検索中のキーワード:",
+      stockLoadError: "株価データを読み込めませんでした",
     }
   },
   ko: {
@@ -402,6 +405,7 @@ const resources = {
 
       searchPlaceholder: "티커, 이름 또는 상태(상승/하락) 검색...",
       searchPrefix: "검색 중인 키워드:",
+      stockLoadError: "주식 데이터를 불러올 수 없습니다",
     }
   }
 };
