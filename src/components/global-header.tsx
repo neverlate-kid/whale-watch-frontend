@@ -162,7 +162,7 @@ export default function GlobalHeader() {
         <Text style={{ fontSize: 16, marginRight: 8, opacity: 0.6 }}>🔍</Text>
         <TextInput
           style={[styles.searchInput, { color: colors.textPrimary }]}
-          placeholder="搜索代码、名称或状态(涨/跌)..."
+          placeholder={t('searchPlaceholder')}
           placeholderTextColor={colors.textSecondary}
           value={searchQuery}
           onChangeText={setSearchQuery}

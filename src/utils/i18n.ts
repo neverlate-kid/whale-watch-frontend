@@ -98,11 +98,13 @@ const resources = {
       iapSuccessTitle: "尊享解锁 ✨",
       iapSuccessMsg: "至尊会员权限已成功激活！",
 
-      // 🌟 新增：独立自选页面的专属词条
       favoritesTitle: "我的自选",
       emptyFavorites: "您的自选清单空空如也，去发现一些有潜力的股票吧！",
       removeFavConfirmTitle: "移除自选",
-      removeFavConfirmMsg: "确定要将 {{ticker}} 从自选名单中移除吗？"
+      removeFavConfirmMsg: "确定要将 {{ticker}} 从自选名单中移除吗？",
+
+      searchPlaceholder: "搜索代码、名称或状态(涨/跌)...",
+      searchPrefix: "您正在搜索词条:",
     }
   },
   en: {
@@ -195,11 +197,13 @@ const resources = {
       iapSuccessTitle: "Success ✨",
       iapSuccessMsg: "Premium features unlocked successfully!",
 
-      // 🌟 新增：独立自选页面的专属词条
       favoritesTitle: "My Watchlist",
       emptyFavorites: "Your watchlist is empty. Go discover some potential stocks!",
       removeFavConfirmTitle: "Remove",
-      removeFavConfirmMsg: "Are you sure you want to remove {{ticker}} from your watchlist?"
+      removeFavConfirmMsg: "Are you sure you want to remove {{ticker}} from your watchlist?",
+
+      searchPlaceholder: "Search ticker, name, or status (up/down)...",
+      searchPrefix: "Searching for term:",
     }
   },
   ja: {
@@ -292,11 +296,13 @@ const resources = {
       iapSuccessTitle: "有効化完了 ✨",
       iapSuccessMsg: "プレミアム機能が正常に解放されました！",
 
-      // 🌟 新增：独立自选页面的专属词条
       favoritesTitle: "お気に入り",
       emptyFavorites: "お気に入り銘柄がありません。気になる銘柄を追加しましょう！",
       removeFavConfirmTitle: "削除",
-      removeFavConfirmMsg: "{{ticker}} をお気に入りから削除してもよろしいですか？"
+      removeFavConfirmMsg: "{{ticker}} をお気に入りから削除してもよろしいですか？",
+
+      searchPlaceholder: "銘柄コード、名称、または状態(上昇/下落)で検索...",
+      searchPrefix: "検索中のキーワード:",
     }
   },
   ko: {
@@ -389,11 +395,13 @@ const resources = {
       iapSuccessTitle: "활성화 성공 ✨",
       iapSuccessMsg: "프리미엄 기능이 성공적으로 해제되었습니다!",
 
-      // 🌟 新增：独立自选页面的专属词条
       favoritesTitle: "내 관심종목",
       emptyFavorites: "관심종목이 비어 있습니다. 잠재력 있는 종목을 추가해 보세요!",
       removeFavConfirmTitle: "목록에서 제거",
-      removeFavConfirmMsg: "{{ticker}} 종목을 관심종목에서 제거하시겠습니까?"
+      removeFavConfirmMsg: "{{ticker}} 종목을 관심종목에서 제거하시겠습니까?",
+
+      searchPlaceholder: "티커, 이름 또는 상태(상승/하락) 검색...",
+      searchPrefix: "검색 중인 키워드:",
     }
   }
 };
