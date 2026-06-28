@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
-import { View, Dimensions, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Circle, Line } from 'react-native-svg';
-import { useTranslation } from 'react-i18next';
+import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { formatStockTime } from '@/utils/i18n';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
 interface ChartProps {
+  ticker: string;
   data: { date: string; close: number; volume: number }[];
   color: string;
   textColor: string;
@@ -13,15 +15,27 @@ interface ChartProps {
   onTimeZoneChange: (mode: 'JST' | 'local') => void;
 }
 
-export function StockChart({ data, color, textColor, borderColor, timeZoneMode, onTimeZoneChange }: ChartProps) {
+export function StockChart({ ticker, data, color, textColor, borderColor, timeZoneMode, onTimeZoneChange }: ChartProps) {
   const { t, i18n } = useTranslation();
+  const getStockName = () => {
+    if (!ticker || typeof ticker !== 'string') {
+      return "Loading..."; // 渲染瞬间如果 ticker 还没过来，显示 Loading
+    }
+    const info = NIKKEI_225_DICT[ticker];
+    if (!info) {
+      return ticker; // 找不到名字就退回到原始 ticker
+    }
+    const lang = i18n.language.substring(0, 2);
+    return (info as any)[lang] || info.en;
+  };
+
   if (!data || data.length === 0) return null;
 
   const screenWidth = Dimensions.get('window').width - 80;
   const height = 180;
   const paddingRight = 55;
   const paddingBottom = 20;
-  
+
   const chartWidth = screenWidth - paddingRight;
   const chartHeight = height - paddingBottom;
 
@@ -85,6 +99,14 @@ export function StockChart({ data, color, textColor, borderColor, timeZoneMode, 
       {/* 顶部面板 */}
       <View style={[styles.interactiveHeader, { borderColor }]}>
         <View>
+          <Text style={{
+            color: textColor,
+            fontSize: 13,
+            fontWeight: '900',
+            marginBottom: 2
+          }}>
+            {ticker}
+          </Text>
           <Text style={[styles.statusText, { color: activePoint ? color : textColor }]}>
             ● {activePoint ? 'LOCKED' : t('latest')}
           </Text>
@@ -125,7 +147,7 @@ export function StockChart({ data, color, textColor, borderColor, timeZoneMode, 
               )}
             </Svg>
           </View>
-          
+
           <View style={[styles.xAxis, { borderColor }]}>
             {xTicks.map((tick, idx) => (
               <View key={idx} style={[styles.timeLabelWrapper, { alignItems: tick.align }]}>
@@ -154,10 +176,10 @@ export function StockChart({ data, color, textColor, borderColor, timeZoneMode, 
         <Text style={[styles.liveTimeText, { color: textColor }]} numberOfLines={1}>
           ⏱️ {activePoint ? t('lockedTime') : t('patchTime')}: {getLocalizedDate(displayPoint.date)}
         </Text>
-        
+
         {/* 🔘 彻底美化后的极简拟物化圆形小纽扣 */}
-        <TouchableOpacity 
-          style={[styles.miniZoneButton, { backgroundColor: color }]} 
+        <TouchableOpacity
+          style={[styles.miniZoneButton, { backgroundColor: color }]}
           onPress={() => onTimeZoneChange(timeZoneMode === 'JST' ? 'local' : 'JST')}
           activeOpacity={0.7}
         >
@@ -180,11 +202,11 @@ const styles = StyleSheet.create({
   tickLabelWrapper: { flex: 1 },
   timeLabelWrapper: { flex: 1 },
   tickText: { fontSize: 9, fontFamily: 'monospace', fontWeight: '600' },
-  
+
   // 底部底座精修
   liveTimeFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingLeft: 10, paddingRight: 6, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   liveTimeText: { fontSize: 10, fontWeight: '700', fontFamily: 'monospace', flex: 1, marginRight: 8 },
-  
+
   // 圆形微粒小开关，拒绝拥挤
   miniZoneButton: { width: 36, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1 },
   miniZoneText: { fontSize: 9, fontWeight: '900', color: '#000' }

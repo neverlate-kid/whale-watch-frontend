@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useAppTheme } from '@/context/theme-context';
 import { StockChart } from '@/components/stock-chart';
+import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
+import { useAppTheme } from '@/context/theme-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DetailScreen() {
+  const { i18n } = useTranslation();
   const { ticker } = useLocalSearchParams<{ ticker: string }>();
   const { colors } = useAppTheme();
   const router = useRouter();
@@ -24,7 +26,7 @@ export default function DetailScreen() {
         const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
         const response = await fetch(`${baseUrl}/api/v1/stocks/${ticker}`);
         const json = await response.json();
-        
+
         if (json.success) {
           setStock(json.data);
         }
@@ -65,10 +67,18 @@ export default function DetailScreen() {
 
         {/* 图表卡片：现在 stock.isUp 和 daily_data_1y 是完全可用的 */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.tickerCode, { color: colors.textPrimary }]}>{ticker}</Text>
+          <Text style={[styles.tickerCode, { color: colors.textPrimary }]}>
+            {(() => {
+              const info = NIKKEI_225_DICT[ticker];
+              if (!info) return ticker;
+              const lang = i18n.language.substring(0, 2) as keyof typeof info;
+              return info[lang] || info.en;
+            })()}
+          </Text>
           <View style={styles.chartWrapper}>
-            <StockChart 
-              data={stock.daily_data_1y} 
+            <StockChart
+              ticker={ticker}
+              data={stock.daily_data_1y}
               color={stock.isUp ? '#30D158' : '#FF453A'} // 这里的 stock.isUp 现在是安全的
               textColor={colors.textSecondary}
               borderColor={colors.border}

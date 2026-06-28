@@ -1,32 +1,54 @@
 import { StockChart } from '@/components/stock-chart';
+import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
 import dayjs from 'dayjs';
 import { useRouter } from 'expo-router';
-import React, { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, StatusBar, Animated, Platform, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function HomeScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { theme, colors } = useAppTheme();
   const { isPremium, isLoggedIn, favorites, toggleFavorite } = useAppUser();
   const router = useRouter();
-
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
   const [period, setPeriod] = useState<'1Y' | '10Y'>('1Y');
-
+  // 核心状态
+  const [topMovers, setTopMovers] = useState<any[]>([]); // 存放 API 数据
+  const [isLoading, setIsLoading] = useState(true); // 👈 必须初始化为 true
   const [toastMessage, setToastMessage] = useState('');
   const toastOpacity = useRef(new Animated.Value(0)).current;
-
   const todayDate = dayjs().format('YYYY-MM-DD');
-  const [stockList, setStockList] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
   // 🌟 核心修复：收束真实权限判断逻辑
   const hasAccess = isLoggedIn && isPremium;
+
+  useEffect(() => {
+    const fetchStocks = async () => {
+      setIsLoading(true); // 确保开始加载时为 true
+      try {
+        const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+        const response = await fetch(`${baseUrl}/api/v1/stocks`);
+        const json = await response.json();
+
+        if (json.success && Array.isArray(json.data)) {
+          // 在前端取异动最大的前3名
+          const sorted = [...json.data]
+            .sort((a: any, b: any) => b.volatility_score - a.volatility_score)
+            .slice(0, 3);
+          setTopMovers(sorted);
+        }
+      } catch (error) {
+        console.error("加载数据失败:", error);
+      } finally {
+        setIsLoading(false); // 👈 无论成功与否，必须设为 false
+      }
+    };
+    fetchStocks();
+  }, []);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -61,35 +83,11 @@ export default function HomeScreen() {
     return isFav ? { style: { opacity: 1.0, transform: [{ scale: 1.15 }] } } : { style: { opacity: 0.5, filter: 'grayscale(100%)' } as any };
   };
 
-  useEffect(() => {
-    const fetchStocks = async () => {
-      try {
-        // 根据平台动态判断本地后端的 IP
-        const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
-        const response = await fetch(`${baseUrl}/api/v1/stocks`);
-        const json = await response.json();
-
-        if (json.success) {
-          setStockList(json.data);
-        } else {
-          showToast('Failed to load stock data');
-        }
-      } catch (error) {
-        console.error('API Fetch Error:', error);
-        showToast('Network error connecting to backend');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchStocks();
-  }, []);
-
+  // 渲染加载态
   if (isLoading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color={colors.textPrimary} />
-        <Text style={{ color: colors.textSecondary, marginTop: 10 }}>Connecting to Local API...</Text>
       </View>
     );
   }
@@ -107,24 +105,30 @@ export default function HomeScreen() {
 
       <View style={styles.carouselContainer}>
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={SCREEN_WIDTH - 40} decelerationRate="fast" contentContainerStyle={styles.scrollContent}>
-          {stockList.map((stock) => {
+          {topMovers.map((stock) => {
             const chartData = period === '1Y' ? stock.daily_data_1y : stock.weekly_data_10y;
             const diamondConfig = getDiamondConfig(stock.ticker);
             return (
               <View key={stock.ticker} style={[styles.mainCard, { backgroundColor: colors.card, borderColor: colors.border, width: SCREEN_WIDTH - 50 }]}>
                 <View style={styles.tickerRow}>
-                  <Text style={[styles.codeText, { color: colors.textPrimary }]}>{stock.ticker}</Text>
+                  <Text style={[styles.codeText, { color: colors.textPrimary }]}>
+                    {(() => {
+                      const info = NIKKEI_225_DICT[stock.ticker];
+                      if (!info) return stock.ticker;
+                      const lang = i18n.language.substring(0, 2) as keyof typeof info;
+                      return info[lang] || info.en;
+                    })()}
+                  </Text>
                   <TouchableOpacity style={styles.favTouchArea} onPress={() => handleFavoriteClick(stock.ticker)}>
                     <Text style={[{ fontSize: 22 }, diamondConfig.style]}>💎</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={[styles.stockName, { color: colors.textPrimary }]}>{t(stock.nameKey)}</Text>
                 <View style={styles.priceContainer}>
                   <Text style={[styles.priceValue, { color: colors.textPrimary }]}>¥{stock.price.toLocaleString()}</Text>
                   <Text style={[styles.changeValue, { color: stock.isUp ? '#30D158' : '#FF453A' }]}>{stock.change}</Text>
                 </View>
                 <View style={styles.chartWrapper}>
-                  <StockChart data={chartData} color={stock.isUp ? '#30D158' : '#FF453A'} textColor={colors.textSecondary} borderColor={colors.border} timeZoneMode={timeZoneMode} onTimeZoneChange={(mode) => setTimeZoneMode(mode)} />
+                  <StockChart ticker={stock.ticker} data={chartData} color={stock.isUp ? '#30D158' : '#FF453A'} textColor={colors.textSecondary} borderColor={colors.border} timeZoneMode={timeZoneMode} onTimeZoneChange={(mode) => setTimeZoneMode(mode)} />
                 </View>
                 <View style={[styles.tabBar, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   <TouchableOpacity style={[styles.tabButton, period === '1Y' && { backgroundColor: theme === 'dark' ? colors.textPrimary : '#1C1C1E' }]} onPress={() => setPeriod('1Y')}>

@@ -3,7 +3,6 @@ import { StyleSheet, Text, View, FlatList, TouchableOpacity, StatusBar } from 'r
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
-import { mockStockData } from '@/constants/mock-stock';
 import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 

@@ -241,7 +241,8 @@ export const NIKKEI_225_DICT: Record<string, StockInfo> = {
   "7911.T": { ticker: "7911.T", zh: "凸版印刷", ja: "TOPPAN", en: "Toppan", ko: "토판", sector: "Other Products" },
   "7912.T": { ticker: "7912.T", zh: "大日本印刷", ja: "大日本印刷", en: "Dai Nippon Printing", ko: "대일본 인쇄", sector: "Other Products" },
   "7951.T": { ticker: "7951.T", zh: "雅马哈", ja: "ヤマハ", en: "Yamaha", ko: "야마하", sector: "Other Products" },
-  "9301.T": { ticker: "9301.T", zh: "三菱物流", ja: "三菱倉庫", en: "Mitsubishi Logistics", ko: "미쓰비시 창고", sector: "Warehousing" }
+  "9301.T": { ticker: "9301.T", zh: "三菱物流", ja: "三菱倉庫", en: "Mitsubishi Logistics", ko: "미쓰비시 창고", sector: "Warehousing" },
+  "8136.T": { ticker: "8136.T", zh: "卡普空", ja: "カプコン", en: "Capcom", ko: "캡콤", sector: "Other Products" },
 };
 
 export const isMatchSearch = (ticker: string, query: string): boolean => {

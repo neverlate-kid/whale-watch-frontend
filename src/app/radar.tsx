@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, Text, View, FlatList, Platform, TouchableOpacity, StatusBar, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
-import { mockRadarList } from '@/constants/mock-stock';
 import { useTranslation } from 'react-i18next';
 import Svg, { Path } from 'react-native-svg';
 
@@ -19,8 +18,44 @@ export default function RadarScreen() {
   // 控制雷达页自己的登录弹窗状态
   const [loginModalVisible, setLoginModalVisible] = useState(false);
 
+  // 状态管理
+  const [radarData, setRadarData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const hasAccess = isLoggedIn && isPremium;
-  const displayData = hasAccess ? mockRadarList : mockRadarList.slice(0, 2); 
+
+  useEffect(() => {
+    const fetchRadarData = async () => {
+      setIsLoading(true);
+      try {
+        const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000';
+        const response = await fetch(`${baseUrl}/api/v1/stocks`);
+        const json = await response.json();
+        
+        if (json.success && Array.isArray(json.data)) {
+          // 后端取回全量数据后，按 volatility_score 排序
+          const sorted = [...json.data].sort((a, b) => b.volatility_score - a.volatility_score);
+          setRadarData(sorted);
+        }
+      } catch (e) {
+        console.error("加载雷达数据失败:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchRadarData();
+  }, []);
+
+  // 根据权限截取数组
+  const displayData = hasAccess ? radarData : radarData.slice(0, 5);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.textPrimary} />
+      </View>
+    );
+  }
 
   const handleBottomAction = () => {
       if (!isLoggedIn) {
@@ -81,7 +116,9 @@ export default function RadarScreen() {
           <TouchableOpacity style={[styles.stripCard, { backgroundColor: colors.card, borderColor: colors.border }]} activeOpacity={0.7} onPress={() => router.push(`/detail/${item.ticker}`)}>
             <View style={styles.leftCol}>
               <View style={[styles.scoreBadge, { backgroundColor: item.isUp ? '#30D15820' : '#FF453A20', borderColor: item.isUp ? '#30D158' : '#FF453A' }]}>
-                <Text style={{ color: item.isUp ? '#30D158' : '#FF453A', fontSize: 10, fontWeight: '900' }}>{item.score} 🔥</Text>
+                <Text style={{ color: item.isUp ? '#30D158' : '#FF453A', fontSize: 10, fontWeight: '900' }}>
+                  {item.volatility_score.toFixed(1)} 🔥
+                </Text>
               </View>
               <View>
                 <Text style={[styles.tickerText, { color: colors.textPrimary }]}>{item.ticker}</Text>
