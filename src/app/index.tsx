@@ -1,12 +1,11 @@
-import React, { useState, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, StatusBar, Animated } from 'react-native';
-import { useRouter } from 'expo-router';
+import { StockChart } from '@/components/stock-chart';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
-import { mockStockData } from '@/constants/mock-stock';
-import { StockChart } from '@/components/stock-chart';
-import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { useRouter } from 'expo-router';
+import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Dimensions, StatusBar, Animated, Platform, ActivityIndicator } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -23,7 +22,8 @@ export default function HomeScreen() {
   const toastOpacity = useRef(new Animated.Value(0)).current;
 
   const todayDate = dayjs().format('YYYY-MM-DD');
-  const stockList = Object.values(mockStockData);
+  const [stockList, setStockList] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // 🌟 核心修复：收束真实权限判断逻辑
   const hasAccess = isLoggedIn && isPremium;
@@ -48,7 +48,7 @@ export default function HomeScreen() {
       showToast(`🔒 ${t('memberExclusive')}`);
       return;
     }
-    
+
     const isCurrentlyFav = favorites.includes(ticker);
     toggleFavorite(ticker);
     showToast(isCurrentlyFav ? t('favRemoved', { ticker }) : t('favAdded', { ticker }));
@@ -60,6 +60,39 @@ export default function HomeScreen() {
     if (!hasAccess) return { style: { opacity: 0.25, filter: 'grayscale(100%)' } as any };
     return isFav ? { style: { opacity: 1.0, transform: [{ scale: 1.15 }] } } : { style: { opacity: 0.5, filter: 'grayscale(100%)' } as any };
   };
+
+  useEffect(() => {
+    const fetchStocks = async () => {
+      try {
+        // 根据平台动态判断本地后端的 IP
+        const baseUrl = Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
+        const response = await fetch(`${baseUrl}/api/v1/stocks`);
+        const json = await response.json();
+
+        if (json.success) {
+          setStockList(json.data);
+        } else {
+          showToast('Failed to load stock data');
+        }
+      } catch (error) {
+        console.error('API Fetch Error:', error);
+        showToast('Network error connecting to backend');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStocks();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.textPrimary} />
+        <Text style={{ color: colors.textSecondary, marginTop: 10 }}>Connecting to Local API...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

@@ -3,9 +3,8 @@ import { useAppUser } from '@/context/user-context';
 import { useRouter } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, TouchableOpacity, View, Animated, Alert } from 'react-native';
+import React, { StyleSheet, Text, TouchableOpacity, View, Animated, Alert, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// 🌟 引入 MaterialIcons 来完美替代出问题的 AntDesign linechart
 import { AntDesign, MaterialIcons } from '@expo/vector-icons'; 
 
 import { LoginModal } from '@/components/login-modal';
@@ -25,10 +24,19 @@ export default function GlobalHeader() {
   
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loginModalVisible, setLoginModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(''); // 👉 搜索状态
 
   const insets = useSafeAreaInsets();
   const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
   const toggleAnim = useRef(new Animated.Value(theme === 'dark' ? 1 : 0)).current;
+
+  // 👉 搜索跳转逻辑
+  const handleSearch = () => {
+    if (searchQuery.trim().length > 0) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
+      setSearchQuery(''); 
+    }
+  };
 
   useEffect(() => {
     Animated.timing(toggleAnim, {
@@ -77,74 +85,90 @@ export default function GlobalHeader() {
         }
       ]}
     >
-      <View style={styles.leftRow}>
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          style={[styles.toggleContainer, { backgroundColor: theme === 'dark' ? '#141417' : '#E5E5EA', borderColor: colors.border }]} 
-          onPress={toggleTheme}
-        >
-          <View style={styles.toggleIconContainer}>
-            <Text style={styles.toggleInsideIcon}>☀️</Text>
-            <Text style={styles.toggleInsideIcon}>🌙</Text>
-          </View>
-          <Animated.View 
-            style={[
-              styles.toggleSlider, 
-              { 
-                transform: [{ translateX }],
-                backgroundColor: theme === 'dark' ? '#F4D068' : '#1C1C1E',
-                shadowColor: theme === 'dark' ? '#F4D068' : '#000'
-              }
-            ]} 
-          />
-        </TouchableOpacity>
-
-        <View style={styles.langWrapper}>
-          <TouchableOpacity style={[styles.langBtn, { borderColor: colors.border }]} onPress={() => setDropdownOpen(!dropdownOpen)}>
-            <Text style={[styles.langText, { color: colors.textPrimary }]}>{currentLang.name} ▾</Text>
+      {/* 第一行：功能控制区 */}
+      <View style={styles.topRow}>
+        <View style={styles.leftRow}>
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            style={[styles.toggleContainer, { backgroundColor: theme === 'dark' ? '#141417' : '#E5E5EA', borderColor: colors.border }]} 
+            onPress={toggleTheme}
+          >
+            <View style={styles.toggleIconContainer}>
+              <Text style={styles.toggleInsideIcon}>☀️</Text>
+              <Text style={styles.toggleInsideIcon}>🌙</Text>
+            </View>
+            <Animated.View 
+              style={[
+                styles.toggleSlider, 
+                { 
+                  transform: [{ translateX }],
+                  backgroundColor: theme === 'dark' ? '#F4D068' : '#1C1C1E',
+                  shadowColor: theme === 'dark' ? '#F4D068' : '#000'
+                }
+              ]} 
+            />
           </TouchableOpacity>
 
-          {dropdownOpen && (
-            <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {languages.map((lang) => (
-                <TouchableOpacity key={lang.code} style={styles.dropdownItem} onPress={() => changeLanguage(lang.code)}>
-                  <Text style={[styles.dropdownName, { color: colors.textPrimary }]}>{lang.name}</Text>
-                  {i18n.language === lang.code && <Text style={[styles.checkmark, { color: colors.textPrimary }]}>✓</Text>}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          <View style={styles.langWrapper}>
+            <TouchableOpacity style={[styles.langBtn, { borderColor: colors.border }]} onPress={() => setDropdownOpen(!dropdownOpen)}>
+              <Text style={[styles.langText, { color: colors.textPrimary }]}>{currentLang.name} ▾</Text>
+            </TouchableOpacity>
+
+            {dropdownOpen && (
+              <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                {languages.map((lang) => (
+                  <TouchableOpacity key={lang.code} style={styles.dropdownItem} onPress={() => changeLanguage(lang.code)}>
+                    <Text style={[styles.dropdownName, { color: colors.textPrimary }]}>{lang.name}</Text>
+                    {i18n.language === lang.code && <Text style={[styles.checkmark, { color: colors.textPrimary }]}>✓</Text>}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <TouchableOpacity 
+              style={[styles.avatarBtn, { borderColor: colors.border, backgroundColor: colors.card }]} 
+              onPress={handleFavoritesPress}
+              activeOpacity={0.7}
+            >
+               <MaterialIcons name="show-chart" size={18} color={colors.textPrimary} />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.avatarBtn, { borderColor: colors.border, backgroundColor: colors.card }]} 
+              onPress={handleAvatarPress}
+              activeOpacity={0.7}
+            >
+              {isLoggedIn ? (
+                <>
+                  <AntDesign name="user" size={20} color={colors.textPrimary} />
+                  {isPremium && (
+                    <View style={[styles.crownBadge, { backgroundColor: theme === 'dark' ? '#2A261F' : '#FFFDF0', borderColor: '#D4A373' }]}>
+                      <Text style={styles.crownIconText}>👑</Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <AntDesign name="user" size={20} color={colors.textSecondary} style={{ opacity: 0.5 }} />
+              )}
+            </TouchableOpacity>
         </View>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-          {/* 🌟 替换为 MaterialIcons 的 show-chart (标准的股票波动折线图) */}
-          <TouchableOpacity 
-            style={[styles.avatarBtn, { borderColor: colors.border, backgroundColor: colors.card }]} 
-            onPress={handleFavoritesPress}
-            activeOpacity={0.7}
-          >
-             <MaterialIcons name="show-chart" size={18} color={colors.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.avatarBtn, { borderColor: colors.border, backgroundColor: colors.card }]} 
-            onPress={handleAvatarPress}
-            activeOpacity={0.7}
-          >
-            {isLoggedIn ? (
-              <>
-                <AntDesign name="user" size={20} color={colors.textPrimary} />
-                {isPremium && (
-                  <View style={[styles.crownBadge, { backgroundColor: theme === 'dark' ? '#2A261F' : '#FFFDF0', borderColor: '#D4A373' }]}>
-                    <Text style={styles.crownIconText}>👑</Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <AntDesign name="user" size={20} color={colors.textSecondary} style={{ opacity: 0.5 }} />
-            )}
-          </TouchableOpacity>
+      {/* 👉 第二行：搜索框 */}
+      <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <Text style={{ fontSize: 16, marginRight: 8, opacity: 0.6 }}>🔍</Text>
+        <TextInput
+          style={[styles.searchInput, { color: colors.textPrimary }]}
+          placeholder="搜索代码、名称或状态(涨/跌)..."
+          placeholderTextColor={colors.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmitEditing={handleSearch}
+          returnKeyType="search"
+        />
       </View>
 
       <LoginModal 
@@ -156,8 +180,11 @@ export default function GlobalHeader() {
 }
 
 const styles = StyleSheet.create({
-  headerContainer: { paddingHorizontal: 16, paddingBottom: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, zIndex: 999 },
+  headerContainer: { paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, zIndex: 999 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   leftRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  searchBar: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 40 },
+  searchInput: { flex: 1, fontSize: 14, fontWeight: '500' },
   toggleContainer: { width: 58, height: 32, borderRadius: 16, borderWidth: 1, position: 'relative', justifyContent: 'center', paddingHorizontal: 4 },
   toggleIconContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 2 },
   toggleInsideIcon: { fontSize: 11 },
