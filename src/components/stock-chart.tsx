@@ -2,7 +2,7 @@ import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { formatStockTime } from '@/utils/i18n';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop } from 'react-native-svg';
 
 interface ChartProps {
@@ -13,21 +13,18 @@ interface ChartProps {
   borderColor: string;
   timeZoneMode: 'JST' | 'local';
   onTimeZoneChange: (mode: 'JST' | 'local') => void;
+  // 🌟 新增：客户端实时刷新相关的 Props
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
+  marketStatus?: 'open' | 'closed'; 
 }
 
-export function StockChart({ ticker, data, color, textColor, borderColor, timeZoneMode, onTimeZoneChange }: ChartProps) {
+export function StockChart({ 
+  ticker, data, color, textColor, borderColor, 
+  timeZoneMode, onTimeZoneChange,
+  onRefresh, isRefreshing = false, marketStatus = 'closed' 
+}: ChartProps) {
   const { t, i18n } = useTranslation();
-  const getStockName = () => {
-    if (!ticker || typeof ticker !== 'string') {
-      return "Loading..."; // 渲染瞬间如果 ticker 还没过来，显示 Loading
-    }
-    const info = NIKKEI_225_DICT[ticker];
-    if (!info) {
-      return ticker; // 找不到名字就退回到原始 ticker
-    }
-    const lang = i18n.language.substring(0, 2);
-    return (info as any)[lang] || info.en;
-  };
 
   if (!data || data.length === 0) return null;
 
@@ -45,22 +42,27 @@ export function StockChart({ ticker, data, color, textColor, borderColor, timeZo
   const priceRange = maxPrice - minPrice || 1;
   const yTicks = [maxPrice, minPrice + priceRange / 2, minPrice];
 
+  // 🌟 核心时间解析逻辑：自动区分纯日期与带时间的实时数据
   const getLocalizedDate = (rawDate: string) => {
-    const fullJstString = rawDate.includes(' ') ? rawDate : `${rawDate} 15:30:00`;
-    return formatStockTime(fullJstString, timeZoneMode);
+    // 假设纯日期格式为 "YYYY-MM-DD" (长度 10)
+    // 如果没有时间尾缀，或者当前已经收盘，我们只显示日期，不显示具体几点
+    if (rawDate.length <= 10 || marketStatus === 'closed') {
+      return rawDate.split(' ')[0]; // 确保只返回 YYYY-MM-DD
+    }
+    // 如果是盘中实时拼接的数据，包含时间（如 "2026-06-26 14:30:00"），则走时区转换引擎
+    return formatStockTime(rawDate, timeZoneMode);
   };
 
-  // 🌐 根据当前语言，动态计算 Toggle 内部应该显示哪个缩写中文字符
   const getToggleLabel = () => {
     if (timeZoneMode === 'JST') {
-      if (i18n.language === 'zh') return '东京'; // 东京时间
-      if (i18n.language === 'ja') return '日本'; // 日本時間
-      if (i18n.language === 'ko') return '도쿄'; // 도쿄
+      if (i18n.language === 'zh') return '东京'; 
+      if (i18n.language === 'ja') return '日本'; 
+      if (i18n.language === 'ko') return '도쿄'; 
       return 'J';
     } else {
-      if (i18n.language === 'zh') return '本地'; // 本地时间
-      if (i18n.language === 'ja') return '現地'; // 現地時間
-      if (i18n.language === 'ko') return '로컬'; // 로컬
+      if (i18n.language === 'zh') return '本地'; 
+      if (i18n.language === 'ja') return '現地'; 
+      if (i18n.language === 'ko') return '로컬'; 
       return 'L';
     }
   };
@@ -93,30 +95,53 @@ export function StockChart({ ticker, data, color, textColor, borderColor, timeZo
   };
 
   const displayPoint = activePoint || points[points.length - 1];
+  
+  // 判断当前选中的点是否有时间信息（即是否是今天拼接的实时点）
+  const hasTimeInfo = displayPoint.date.length > 10 && marketStatus === 'open';
 
   return (
     <View style={styles.container}>
       {/* 顶部面板 */}
       <View style={[styles.interactiveHeader, { borderColor }]}>
         <View>
-          <Text style={{
-            color: textColor,
-            fontSize: 13,
-            fontWeight: '900',
-            marginBottom: 2
-          }}>
+          <Text style={{ color: textColor, fontSize: 13, fontWeight: '900', marginBottom: 2 }}>
             {ticker}
           </Text>
-          <Text style={[styles.statusText, { color: activePoint ? color : textColor }]}>
+          <Text style={[styles.statusText, { color: textColor }]}>
             ● {activePoint ? t('statusLocked') : t('latest')}
           </Text>
           <Text style={[styles.volumeText, { color: textColor }]}>
             {t('volume')}: {displayPoint.volume.toLocaleString()}
           </Text>
         </View>
-        <Text style={[styles.livePrice, { color }]}>
-          ¥{displayPoint.close.toLocaleString()}
-        </Text>
+
+        {/* 🌟 价格与刷新控制区 */}
+        <View style={{ alignItems: 'flex-end' }}>
+          <Text style={[styles.livePrice, { color }]}>
+            ¥{displayPoint.close.toLocaleString()}
+          </Text>
+          
+          <TouchableOpacity
+            style={[
+              styles.refreshCapsule, 
+              { 
+                backgroundColor: marketStatus === 'closed' ? borderColor + '20' : color + '15',
+                borderColor: marketStatus === 'closed' ? borderColor + '50' : color + '60'
+              }
+            ]}
+            disabled={marketStatus === 'closed' || isRefreshing}
+            onPress={onRefresh}
+            activeOpacity={0.7}
+          >
+            {isRefreshing ? (
+              <ActivityIndicator size="small" color={color} style={{ transform: [{ scale: 0.6 }] }} />
+            ) : (
+              <Text style={[styles.refreshText, { color: marketStatus === 'closed' ? textColor : color }]}>
+                {marketStatus === 'closed' ? `🌙 ${t('marketClosed')}` : `🔄 ${t('refreshPrice')}`}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 图表主图 */}
@@ -147,7 +172,6 @@ export function StockChart({ ticker, data, color, textColor, borderColor, timeZo
               )}
             </Svg>
           </View>
-
           <View style={[styles.xAxis, { borderColor }]}>
             {xTicks.map((tick, idx) => (
               <View key={idx} style={[styles.timeLabelWrapper, { alignItems: tick.align }]}>
@@ -156,7 +180,6 @@ export function StockChart({ ticker, data, color, textColor, borderColor, timeZo
             ))}
           </View>
         </View>
-
         <View style={[styles.yAxis, { height: chartHeight, borderColor }]}>
           {yTicks.map((tick, idx) => {
             let justifyStyle: 'flex-start' | 'center' | 'flex-end' = 'center';
@@ -171,20 +194,21 @@ export function StockChart({ ticker, data, color, textColor, borderColor, timeZo
         </View>
       </View>
 
-      {/* 🕒 升级版：呼吸感超紧凑时区底座 */}
+      {/* 🕒 时区底座：如果不是盘中带有时间的实时点，就隐藏右侧的时区切换器，保持UI干净 */}
       <View style={[styles.liveTimeFooter, { backgroundColor: borderColor + '15', borderColor }]}>
         <Text style={[styles.liveTimeText, { color: textColor }]} numberOfLines={1}>
           ⏱️ {activePoint ? t('lockedTime') : t('patchTime')}: {getLocalizedDate(displayPoint.date)}
         </Text>
 
-        {/* 🔘 彻底美化后的极简拟物化圆形小纽扣 */}
-        <TouchableOpacity
-          style={[styles.miniZoneButton, { backgroundColor: color }]}
-          onPress={() => onTimeZoneChange(timeZoneMode === 'JST' ? 'local' : 'JST')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.miniZoneText}>{getToggleLabel()}</Text>
-        </TouchableOpacity>
+        {hasTimeInfo && (
+          <TouchableOpacity
+            style={[styles.miniZoneButton, { borderColor: textColor }]}
+            onPress={() => onTimeZoneChange(timeZoneMode === 'JST' ? 'local' : 'JST')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.miniZoneText, { color: textColor }]}>{getToggleLabel()}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -196,18 +220,19 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '800', fontFamily: 'monospace' },
   volumeText: { fontSize: 11, opacity: 0.6, marginTop: 4 },
   livePrice: { fontSize: 24, fontWeight: '900', fontFamily: 'monospace' },
+  
+  // 🌟 新增：刷新胶囊按钮样式
+  refreshCapsule: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderWidth: 1, marginTop: 4, minWidth: 60, minHeight: 22 },
+  refreshText: { fontSize: 10, fontWeight: '800' },
+
   chartRow: { flexDirection: 'row' },
   yAxis: { flex: 1, justifyContent: 'space-between', paddingLeft: 8, borderLeftWidth: 1 },
   xAxis: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, paddingTop: 4, marginTop: 2 },
   tickLabelWrapper: { flex: 1 },
   timeLabelWrapper: { flex: 1 },
   tickText: { fontSize: 9, fontFamily: 'monospace', fontWeight: '600' },
-
-  // 底部底座精修
   liveTimeFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingLeft: 10, paddingRight: 6, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
   liveTimeText: { fontSize: 10, fontWeight: '700', fontFamily: 'monospace', flex: 1, marginRight: 8 },
-
-  // 圆形微粒小开关，拒绝拥挤
-  miniZoneButton: { width: 36, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 1 },
-  miniZoneText: { fontSize: 9, fontWeight: '900', color: '#000' }
+  miniZoneButton: { width: 36, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+  miniZoneText: { fontSize: 9, fontWeight: '900' }
 });
