@@ -4,7 +4,8 @@ import { useAppTheme } from '@/context/theme-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 export default function DetailScreen() {
   const { t, i18n } = useTranslation();
@@ -60,10 +61,21 @@ export default function DetailScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollBody}>
-        {/* 顶部返回按钮 */}
-        <TouchableOpacity style={styles.header} onPress={() => router.back()}>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>← {ticker}</Text>
-        </TouchableOpacity>
+        <StatusBar barStyle={colors.statusBarStyle} />
+
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+            style={[styles.backCapsule, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <Path d="M15 19L8 12L15 5" stroke={colors.textPrimary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: colors.textPrimary }]}></Text>
+        </View>
 
         {/* 图表卡片：现在 stock.isUp 和 daily_data_1y 是完全可用的 */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -94,8 +106,9 @@ export default function DetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingTop: 4 },
-  header: { paddingHorizontal: 20, marginBottom: 15 },
-  title: { fontSize: 20, fontWeight: '800' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginVertical: 8, gap: 15 },
+  backCapsule: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 1, elevation: 1 },
+  title: { fontSize: 16, fontWeight: '800' },
   scrollBody: { paddingBottom: 40 },
   card: { borderRadius: 14, padding: 18, borderWidth: 1, marginHorizontal: 20 },
   tickerCode: { fontSize: 20, fontWeight: '900', fontFamily: 'monospace', marginBottom: 10 },
