@@ -122,6 +122,9 @@ const resources = {
       usernameEmptyError: "用户名不能为空",
       notLoggedIn: "未登录",
       cancelBtn: "取消",
+      registerSuccessTitle: "注册成功",
+      registerSuccessMsg: "请查看您的邮箱以验证账号。",
+      oauthFailedTitle: "登录失败",
     }
   },
   en: {
@@ -236,6 +239,9 @@ const resources = {
       usernameEmptyError: "Username cannot be empty.",
       notLoggedIn: "Not logged in",
       cancelBtn: "Cancel",
+      registerSuccessTitle: "Success",
+      registerSuccessMsg: "Please check your email to verify your account.",
+      oauthFailedTitle: "Login Failed",
     }
   },
   ja: {
@@ -350,6 +356,9 @@ const resources = {
       usernameEmptyError: "ユーザー名は空にできません。",
       notLoggedIn: "未ログイン",
       cancelBtn: "キャンセル",
+      registerSuccessTitle: "登録成功",
+      registerSuccessMsg: "メールを確認してアカウントを認証してください。",
+      oauthFailedTitle: "ログイン失敗",
     }
   },
   ko: {
@@ -464,6 +473,9 @@ const resources = {
       usernameEmptyError: "사용자 이름은 비워 둘 수 없습니다.",
       notLoggedIn: "로그인되지 않음",
       cancelBtn: "취소",
+      registerSuccessTitle: "가입 성공",
+      registerSuccessMsg: "이메일을 확인하여 계정을 인증해 주세요.",
+      oauthFailedTitle: "로그인 실패",
     }
   }
 };

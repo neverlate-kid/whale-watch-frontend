@@ -70,7 +70,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchFavoritesFromServer = async () => {
       try {
-        const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        if (!baseUrl) {
+          console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)，停止拉取收藏夹");
+          return;
+        }
         const headers = new Headers();
         if (session?.access_token) {
           headers.set('Authorization', `Bearer ${session.access_token}`);
@@ -129,7 +133,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
       
     setFavorites(newFavorites);
 
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL;
     authFetch(`${baseUrl}/api/v1/user/favorites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

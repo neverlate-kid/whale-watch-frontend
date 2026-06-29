@@ -30,7 +30,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 严格的密码强度验证（完全保留你的规则）
+  // 严格的密码强度验证
   const validatePassword = (): boolean => {
     if (passwordInput.length < 8) {
       Alert.alert(t('errorTitle'), t('passwordTooShort'));
@@ -68,29 +68,21 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
 
     if (isRegisterMode && !validatePassword()) return; 
 
-    // 如果没配置 Supabase，直接走本地降级逻辑
-    if (!supabase) {
-      login();
-      resetStateAndClose();
-      return;
-    }
+    if (!supabase) return; // 正式环境：没配云端就直接返回
 
     setLoading(true);
     try {
       if (isRegisterMode) {
-        // 走 Supabase 注册流程
         const { error } = await supabase.auth.signUp({ email: emailInput, password: passwordInput });
         if (error) throw error;
-        Alert.alert("注册成功", "请查看您的邮箱以验证账号。");
+        Alert.alert(t('registerSuccessTitle'), t('registerSuccessMsg'));
       } else {
-        // 走 Supabase 登录流程
         const { error } = await supabase.auth.signInWithPassword({ email: emailInput, password: passwordInput });
         if (error) throw error;
-        // 登录成功后，全局 Context 会监听到 Auth 改变，自动触发 login 状态
         resetStateAndClose();
       }
     } catch (error: any) {
-      Alert.alert("提示", error.message);
+      Alert.alert(t('errorTitle'), error.message);
     } finally {
       setLoading(false);
     }
@@ -98,11 +90,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
 
   // 🌟 第三方 OAuth 登录 (Google / Apple)
   const handleOAuthLogin = async (provider: 'google' | 'apple') => {
-    if (!supabase) {
-      login();
-      resetStateAndClose();
-      return;
-    }
+    if (!supabase) return;
     
     setLoading(true);
     try {
@@ -114,12 +102,11 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
 
       if (error) throw error;
       if (data?.url) {
-         // 唤起系统内置安全浏览器完成登录
          await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
          resetStateAndClose();
       }
     } catch (error: any) {
-      Alert.alert("OAuth 失败", error.message);
+      Alert.alert(t('oauthFailedTitle'), error.message);
     } finally {
       setLoading(false);
     }

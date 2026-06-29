@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getMarketStatus } from '../utils/market';
 
-// TODO: 等你配置好 AWS S3 后，填入 JSON 文件的公网 URL
-const S3_JSON_URL = ''; 
+const S3_JSON_URL = process.env.EXPO_PUBLIC_S3_DATA_URL;
 
 export function useMarketData(refreshIntervalMs = 60000) {
   const [data, setData] = useState<any>(null);
