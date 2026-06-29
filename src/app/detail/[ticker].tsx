@@ -1,7 +1,7 @@
 import { StockChart } from '@/components/stock-chart';
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
-import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入刚创建的 S3 Hook
+import { useMarketData } from '@/hooks/useMarketData'; 
 import { getMarketStatus } from '@/utils/market';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
@@ -26,13 +26,16 @@ export default function DetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
 
-  // 🌟 挂载全局 S3 数据 Hook（统一从云端获取 225 只股票的最新状态）
+  // 🌟 挂载全局 S3 数据 Hook
   const { data: realTimeData, loading: isRefreshingLive, refetch: refetchLive } = useMarketData(60000);
 
   // 1. 获取后端 FastAPI 的历史数据 (只在首次加载执行)
   useEffect(() => {
     const fetchStockDetail = async () => {
-      if (!ticker) return;
+      // 兼容 Expo Router 参数可能是数组的情况
+      const tickerStr = typeof ticker === 'string' ? ticker : ticker?.[0];
+      if (!tickerStr) return;
+      
       setIsLoading(true);
       try {
         const baseUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -41,7 +44,9 @@ export default function DetailScreen() {
           setIsLoading(false);
           return;
         }
-        const response = await fetch(`${baseUrl}/api/v1/stocks`);
+        
+        // 🌟 已修复：精准请求单只股票的详情数据！
+        const response = await fetch(`${baseUrl}/api/v1/stocks/${tickerStr}`);
         const json = await response.json();
 
         if (json.success) {
@@ -93,7 +98,7 @@ export default function DetailScreen() {
     }
   }, [realTimeData, ticker]);
 
-  // 🌟 覆盖原有的刷新方法，现在的刷新直接去拉 CDN 上的文件，再也不用担心被封禁
+  // 🌟 覆盖原有的刷新方法
   const handleRefreshLivePrice = async () => {
     if (getMarketStatus() === 'closed') return;
     refetchLive(); // 触发 Hook 重新拉取
@@ -101,7 +106,7 @@ export default function DetailScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center' }]}>
+      <View style={[styles.container, { justifyContent: 'center', backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.textPrimary} />
       </View>
     );
@@ -109,7 +114,7 @@ export default function DetailScreen() {
 
   if (!stock) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }]}>
         <Text style={{ color: colors.textSecondary }}>{t('stockLoadError', '股票加载失败')}</Text>
       </View>
     );
@@ -146,7 +151,8 @@ export default function DetailScreen() {
             <StockChart
               ticker={ticker as string}
               data={stock.daily_data_1y}
-              color={stock.isUp ? '#30D158' : '#FF453A'}
+              // 判断涨跌：可以用 S3 的最新价减去后端传来的 prev_price (如果没有 prev_price，默认是绿的即可，或者依靠 index 传参)
+              color={stock.isUp !== undefined ? (stock.isUp ? '#30D158' : '#FF453A') : '#30D158'}
               textColor={colors.textSecondary}
               borderColor={colors.border}
               timeZoneMode={timeZoneMode}
