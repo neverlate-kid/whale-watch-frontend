@@ -1,7 +1,8 @@
 import { StockChart } from '@/components/stock-chart';
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
-import { getMarketStatus } from '@/utils/market'; // 🌟 引入状态函数
+import { getMarketStatus } from '@/utils/market';
+import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入刚创建的 S3 Hook
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -20,13 +21,15 @@ export default function DetailScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
 
+  // 本地/后端的历史数据状态
   const [stock, setStock] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
   
-  // 🌟 单页面专属的刷新状态
-  const [isRefreshingLive, setIsRefreshingLive] = useState(false);
+  // 🌟 挂载全局 S3 数据 Hook（统一从云端获取 225 只股票的最新状态）
+  const { data: realTimeData, loading: isRefreshingLive, refetch: refetchLive } = useMarketData(60000);
 
+  // 1. 获取后端 FastAPI 的历史数据 (只在首次加载执行)
   useEffect(() => {
     const fetchStockDetail = async () => {
       if (!ticker) return;
@@ -48,34 +51,31 @@ export default function DetailScreen() {
     fetchStockDetail();
   }, [ticker]);
 
-  // 🌟 单只股票请求逻辑
-  const handleRefreshLivePrice = async () => {
-    if (getMarketStatus() === 'closed') return;
+  // 2. 🌟 核心逻辑：监听 S3 实时数据变化，自动将最新价格拼接到历史图表数组中
+  useEffect(() => {
+    if (!stock || !realTimeData || !realTimeData.stocks) return;
 
-    setIsRefreshingLive(true);
-    try {
-      const yfTicker = /^\d{4}$/.test(ticker as string) ? `${ticker}.T` : ticker;
-      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfTicker}?interval=1m&range=1d`);
-      const json = await response.json();
-      const meta = json.chart.result[0].meta;
-      
-      const currentPrice = meta.regularMarketPrice;
-      const currentVolume = meta.regularMarketVolume;
-      const timestamp = meta.regularMarketTime;
-
-      const jstDateStr = dayjs.unix(timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
-      const todayOnlyDateStr = jstDateStr.split(' ')[0];
-
+    const tickerStr = typeof ticker === 'string' ? ticker : ticker?.[0];
+    const liveInfo = realTimeData.stocks[tickerStr as string];
+    
+    if (liveInfo) {
       setStock((prev: any) => {
+        if (!prev) return prev;
         const updatedStock = { ...prev };
-        updatedStock.price = currentPrice;
+        updatedStock.price = liveInfo.price;
         
         if (updatedStock.daily_data_1y) {
           const newDataArray = [...updatedStock.daily_data_1y];
           const lastPoint = newDataArray[newDataArray.length - 1];
-          const isLastPointToday = lastPoint && lastPoint.date.startsWith(todayOnlyDateStr);
-          const newPoint = { date: jstDateStr, close: currentPrice, volume: currentVolume };
           
+          // 解析 S3 传来的 timestamp，转换为 JST 格式，供图表组件消费
+          const jstDateStr = dayjs(liveInfo.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
+          const todayOnlyDateStr = jstDateStr.split(' ')[0];
+          
+          const isLastPointToday = lastPoint && lastPoint.date.startsWith(todayOnlyDateStr);
+          const newPoint = { date: jstDateStr, close: liveInfo.price, volume: liveInfo.volume };
+          
+          // 如果数组最后一个点是今天，就覆盖它；如果是昨天，就 push 新的一天
           if (isLastPointToday) {
             newDataArray[newDataArray.length - 1] = newPoint;
           } else {
@@ -85,11 +85,13 @@ export default function DetailScreen() {
         }
         return updatedStock;
       });
-    } catch (error) {
-      console.error("YF Refresh Error in Detail:", error);
-    } finally {
-      setIsRefreshingLive(false);
     }
+  }, [realTimeData, ticker]);
+
+  // 🌟 覆盖原有的刷新方法，现在的刷新直接去拉 CDN 上的文件，再也不用担心被封禁
+  const handleRefreshLivePrice = async () => {
+    if (getMarketStatus() === 'closed') return;
+    refetchLive(); // 触发 Hook 重新拉取
   };
 
   if (isLoading) {
@@ -145,7 +147,7 @@ export default function DetailScreen() {
               timeZoneMode={timeZoneMode}
               onTimeZoneChange={setTimeZoneMode}
               
-              // 🌟 绑定给图表
+              // 直接传入 hook 里的状态，图表内部的刷新动画会自动触发
               marketStatus={getMarketStatus()}
               isRefreshing={isRefreshingLive}
               onRefresh={handleRefreshLivePrice}
