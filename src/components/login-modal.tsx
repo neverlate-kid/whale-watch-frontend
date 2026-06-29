@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   StyleSheet, Text, TouchableOpacity, View, Modal, 
-  TextInput, KeyboardAvoidingView, Platform, Pressable, Alert 
+  TextInput, KeyboardAvoidingView, Platform, Pressable, Alert, ActivityIndicator 
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useAppTheme } from '@/context/theme-context';
@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 
+// 必须调用此方法以确保在 Web 浏览器返回时能正确处理回调
 WebBrowser.maybeCompleteAuthSession();
 
 interface LoginModalProps {
@@ -27,7 +28,9 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
   const [passwordInput, setPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [loading, setLoading] = useState(false);
 
+  // 严格的密码强度验证（完全保留你的规则）
   const validatePassword = (): boolean => {
     if (passwordInput.length < 8) {
       Alert.alert(t('errorTitle'), t('passwordTooShort'));
@@ -56,69 +59,78 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
     return true;
   };
 
+  // 🌟 邮箱密码登录 / 注册
   const handleLoginSubmit = async () => {
     if (!emailInput.includes('@')) {
       Alert.alert(t('errorTitle'), t('invalidEmail'));
       return;
     }
 
-    if (isRegisterMode && !validatePassword()) {
-      return; 
-    }
+    if (isRegisterMode && !validatePassword()) return; 
 
-    // 🌟 降级处理：如果没有配置 Supabase，直接执行原逻辑
+    // 如果没配置 Supabase，直接走本地降级逻辑
     if (!supabase) {
       login();
-      setEmailInput('');
-      setPasswordInput('');
-      setConfirmPasswordInput('');
-      setIsRegisterMode(false);
-      onClose();
+      resetStateAndClose();
       return;
     }
 
+    setLoading(true);
     try {
       if (isRegisterMode) {
+        // 走 Supabase 注册流程
         const { error } = await supabase.auth.signUp({ email: emailInput, password: passwordInput });
         if (error) throw error;
-        Alert.alert("注册成功", "请查看您的邮箱完成验证。");
+        Alert.alert("注册成功", "请查看您的邮箱以验证账号。");
       } else {
+        // 走 Supabase 登录流程
         const { error } = await supabase.auth.signInWithPassword({ email: emailInput, password: passwordInput });
         if (error) throw error;
-        
-        // 登录成功后，清空状态并关闭模态框
-        login();
-        setEmailInput('');
-        setPasswordInput('');
-        setConfirmPasswordInput('');
-        setIsRegisterMode(false);
-        onClose();
+        // 登录成功后，全局 Context 会监听到 Auth 改变，自动触发 login 状态
+        resetStateAndClose();
       }
-    } catch (err: any) {
-      Alert.alert("提示", err.message);
+    } catch (error: any) {
+      Alert.alert("提示", error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
+  // 🌟 第三方 OAuth 登录 (Google / Apple)
   const handleOAuthLogin = async (provider: 'google' | 'apple') => {
     if (!supabase) {
       login();
-      onClose();
+      resetStateAndClose();
       return;
     }
+    
+    setLoading(true);
     try {
       const redirectUrl = makeRedirectUri();
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
       });
+
       if (error) throw error;
       if (data?.url) {
+         // 唤起系统内置安全浏览器完成登录
          await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-         onClose();
+         resetStateAndClose();
       }
-    } catch (err: any) {
-      Alert.alert("OAuth 失败", err.message);
+    } catch (error: any) {
+      Alert.alert("OAuth 失败", error.message);
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const resetStateAndClose = () => {
+    setEmailInput('');
+    setPasswordInput('');
+    setConfirmPasswordInput('');
+    setIsRegisterMode(false);
+    onClose();
   };
 
   return (
@@ -126,7 +138,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
       <Pressable style={styles.modalOverlay} onPress={onClose}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalKAV}>
           <Pressable style={[styles.modalSheet, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={(e) => e.stopPropagation()}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} disabled={loading}>
               <Text style={{ color: colors.textSecondary, fontSize: 18, fontWeight: '600' }}>✕</Text>
             </TouchableOpacity>
 
@@ -147,6 +159,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
                 onChangeText={setEmailInput}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                editable={!loading}
               />
             </View>
 
@@ -159,6 +172,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
                 value={passwordInput}
                 onChangeText={setPasswordInput}
                 secureTextEntry
+                editable={!loading}
               />
               {isRegisterMode && (
                 <Text style={[styles.helperText, { color: colors.textSecondary }]}>
@@ -177,19 +191,29 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
                   value={confirmPasswordInput}
                   onChangeText={setConfirmPasswordInput}
                   secureTextEntry
+                  editable={!loading}
                 />
               </View>
             )}
 
-            <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.textPrimary }]} onPress={handleLoginSubmit}>
-              <Text style={[styles.submitBtnText, { color: theme === 'dark' ? '#0A0A0C' : '#FFFFFF' }]}>
-                {isRegisterMode ? t('confirmRegisterBtn') : t('confirmLoginBtn')}
-              </Text>
+            <TouchableOpacity 
+              style={[styles.submitBtn, { backgroundColor: colors.textPrimary, opacity: loading ? 0.7 : 1 }]} 
+              onPress={handleLoginSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={theme === 'dark' ? '#0A0A0C' : '#FFFFFF'} />
+              ) : (
+                <Text style={[styles.submitBtnText, { color: theme === 'dark' ? '#0A0A0C' : '#FFFFFF' }]}>
+                  {isRegisterMode ? t('confirmRegisterBtn') : t('confirmLoginBtn')}
+                </Text>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={{ alignItems: 'center', marginTop: 4, paddingVertical: 4 }} 
               onPress={() => {
+                if(loading) return;
                 setIsRegisterMode(!isRegisterMode);
                 setConfirmPasswordInput('');
               }}
@@ -206,7 +230,11 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
             </View>
 
             <View style={{ gap: 10, marginTop: 2 }}>
-              <TouchableOpacity style={[styles.oauthBtn, styles.googleLightStyle]} onPress={() => handleOAuthLogin('google')}>
+              <TouchableOpacity 
+                style={[styles.oauthBtn, styles.googleLightStyle, { opacity: loading ? 0.5 : 1 }]} 
+                onPress={() => handleOAuthLogin('google')}
+                disabled={loading}
+              >
                 <View style={styles.oauthInner}>
                   <Svg width="18" height="18" viewBox="0 0 24 24">
                     <Path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -221,11 +249,11 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
               <TouchableOpacity 
                 style={[
                   styles.oauthBtn, 
-                  theme === 'dark' 
-                    ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } 
-                    : { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' } 
+                  theme === 'dark' ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } : { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' },
+                  { opacity: loading ? 0.5 : 1 }
                 ]} 
                 onPress={() => handleOAuthLogin('apple')}
+                disabled={loading}
               >
                 <View style={styles.oauthInner}>
                   <Text style={[styles.appleNativeGlyph, { color: theme === 'dark' ? '#000000' : '#1C1C1E' }]}></Text>
