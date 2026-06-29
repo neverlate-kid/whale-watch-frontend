@@ -11,7 +11,6 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 
-// 必须调用以确保 OAuth 重定向回 App
 WebBrowser.maybeCompleteAuthSession();
 
 interface LoginModalProps {
@@ -29,7 +28,6 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
   const [isRegisterMode, setIsRegisterMode] = useState(false);
 
-  // 完全保留你的密码校验逻辑
   const validatePassword = (): boolean => {
     if (passwordInput.length < 8) {
       Alert.alert(t('errorTitle'), t('passwordTooShort'));
@@ -58,18 +56,23 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
     return true;
   };
 
-  // 🌟 邮箱密码登录 / 注册
   const handleLoginSubmit = async () => {
     if (!emailInput.includes('@')) {
       Alert.alert(t('errorTitle'), t('invalidEmail'));
       return;
     }
 
-    if (isRegisterMode && !validatePassword()) return; 
+    if (isRegisterMode && !validatePassword()) {
+      return; 
+    }
 
-    // 如果没配置 Supabase，直接走本地 Mock 逻辑
+    // 🌟 降级处理：如果没有配置 Supabase，直接执行原逻辑
     if (!supabase) {
       login();
+      setEmailInput('');
+      setPasswordInput('');
+      setConfirmPasswordInput('');
+      setIsRegisterMode(false);
       onClose();
       return;
     }
@@ -78,42 +81,43 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
       if (isRegisterMode) {
         const { error } = await supabase.auth.signUp({ email: emailInput, password: passwordInput });
         if (error) throw error;
-        Alert.alert("注册成功", "请查看您的邮箱以验证账号。");
+        Alert.alert("注册成功", "请查看您的邮箱完成验证。");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: emailInput, password: passwordInput });
         if (error) throw error;
-        login(); // 触发本地 context
+        
+        // 登录成功后，清空状态并关闭模态框
+        login();
+        setEmailInput('');
+        setPasswordInput('');
+        setConfirmPasswordInput('');
+        setIsRegisterMode(false);
         onClose();
       }
-    } catch (error: any) {
-      Alert.alert("登录失败", error.message);
+    } catch (err: any) {
+      Alert.alert("提示", err.message);
     }
   };
 
-  // 🌟 第三方 OAuth 登录 (Google / Apple)
   const handleOAuthLogin = async (provider: 'google' | 'apple') => {
     if (!supabase) {
-      // 本地降级测试
       login();
       onClose();
       return;
     }
-
     try {
       const redirectUrl = makeRedirectUri();
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
       });
-
       if (error) throw error;
       if (data?.url) {
          await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-         // OAuth 成功后 AuthListener 会自动处理 session
          onClose();
       }
-    } catch (error: any) {
-      Alert.alert("OAuth 失败", error.message);
+    } catch (err: any) {
+      Alert.alert("OAuth 失败", err.message);
     }
   };
 
@@ -217,7 +221,9 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
               <TouchableOpacity 
                 style={[
                   styles.oauthBtn, 
-                  theme === 'dark' ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } : { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' } 
+                  theme === 'dark' 
+                    ? { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' } 
+                    : { backgroundColor: '#FFFFFF', borderColor: '#E5E5EA' } 
                 ]} 
                 onPress={() => handleOAuthLogin('apple')}
               >

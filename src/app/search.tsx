@@ -8,18 +8,17 @@ import Svg, { Path } from 'react-native-svg';
 import { useMarketData } from '@/hooks/useMarketData';
 
 export default function SearchScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { q } = useLocalSearchParams();
   const searchQuery = Array.isArray(q) ? q[0] : q || '';
 
   const { colors } = useAppTheme();
   const router = useRouter();
-  const { i18n } = useTranslation();
 
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🌟 挂载 S3 全局数据钩子
+  // 🌟 S3 钩子自动轮询
   const { data: realTimeData } = useMarketData(60000);
 
   useEffect(() => {
@@ -43,21 +42,21 @@ export default function SearchScreen() {
     else setIsLoading(false);
   }, [searchQuery]);
 
-  // 🌟 将后端数据库的基础数据，与 S3 的最新价格进行合并
+  // 🌟 数据融合：从 S3 获取实时价格并动态计算涨跌
   const displayResults = useMemo(() => {
     return results.map(item => {
       const s3Info = realTimeData?.stocks?.[item.ticker];
-      // 如果没有配置 S3，就回退展示原先从 FastAPI 查到的收盘数据
-      if (!s3Info) return { ...item, livePrice: item.price, liveChange: item.change, isUp: item.change >= 0 };
+      if (!s3Info) return { ...item, livePrice: item.price, liveChange: item.change, isUp: item.isUp };
       
       const livePrice = s3Info.price;
-      const diff = livePrice - item.price;
-      const liveChangePercent = ((diff / item.price) * 100).toFixed(2) + '%';
+      const prevPrice = item.prev_price || item.price; // 用后端的昨收价做对比
+      const diff = livePrice - prevPrice;
+      const pctStr = prevPrice ? ((diff / prevPrice) * 100).toFixed(2) : '0.00';
       
       return { 
         ...item, 
         livePrice, 
-        liveChange: diff >= 0 ? '+' + liveChangePercent : liveChangePercent, 
+        liveChange: `${diff >= 0 ? '+' : ''}${diff.toFixed(2)} (${pctStr}%)`, 
         isUp: diff >= 0 
       };
     });
@@ -90,6 +89,7 @@ export default function SearchScreen() {
         </Text>
       </View>
 
+      {/* 结果展示列表 */}
       {isLoading ? (
         <ActivityIndicator size="large" color={colors.textPrimary} style={{ marginTop: 50 }} />
       ) : (
@@ -121,9 +121,28 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 4 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginVertical: 12, gap: 15 },
-  backCapsule: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, elevation: 2 },
+  container: { flex: 1, paddingTop: 4 }, // 紧凑型顶边距，适配全局 Header
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginVertical: 12,
+    gap: 15
+  },
+  // 💡 这是全站标准的胶囊返回按钮样式
+  backCapsule: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    elevation: 2
+  },
   title: { fontSize: 18, fontWeight: '800' },
   resultCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderWidth: 1, borderRadius: 12 },
   tickerText: { fontSize: 16, fontWeight: '800' },

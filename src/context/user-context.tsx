@@ -21,18 +21,15 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [username, setUsername] = useState('WhaleHunter_99');
   const [favorites, setFavorites] = useState<string[]>(['9983.T']);
 
-  // 🌟 监听 Supabase 登录状态
+  // 🌟 监听 Supabase 会话，如果没有配置则不产生副作用
   useEffect(() => {
-    if (!supabase) return; // 如果还没配置账号，跳过
-    
+    if (!supabase) return;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setIsLoggedIn(true);
     });
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
