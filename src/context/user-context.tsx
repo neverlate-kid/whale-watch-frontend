@@ -20,7 +20,6 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  // 🌟 生产环境规范：所有状态初始值严格为空/False，绝不写死任何假数据
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [isPremium, setIsPremium] = useState<boolean>(false);
   const [username, setUsername] = useState<string>('');
@@ -31,21 +30,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   // 1. 严格监听真实的云端登录状态
   // ==========================
   useEffect(() => {
-    if (!supabase) return; // 没配置云环境，就是彻彻底底的未登录，绝不造假
+    if (!supabase) return; 
     
-    // 初始化时获取会话
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setIsLoggedIn(!!session);
       if (session) {
-        setIsPremium(true); // TODO: 真实环境下，应根据 session.user.app_metadata 里的订阅字段判断
-        // 动态解析真实用户名：优先取自定义的 username，否则用邮箱前缀兜底
+        setIsPremium(true); 
         const name = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User';
         setUsername(name);
       }
     });
 
-    // 监听 Auth 变化（登入、登出、Token刷新）
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setIsLoggedIn(!!session);
@@ -54,7 +50,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         const name = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User';
         setUsername(name);
       } else {
-        // 登出时，严格清空所有内存敏感数据
         setIsPremium(false);
         setFavorites([]);
         setUsername('');
@@ -75,6 +70,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
           console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)，停止拉取收藏夹");
           return;
         }
+        
         const headers = new Headers();
         if (session?.access_token) {
           headers.set('Authorization', `Bearer ${session.access_token}`);
@@ -100,7 +96,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [isLoggedIn, session]);
 
   // ==========================
-  // 3. 核心网络层：自动携带 JWT Token 的专属 Fetch
+  // 3. 核心网络层：专属 Fetch
   // ==========================
   const authFetch = async (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
@@ -110,8 +106,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     return fetch(url, { ...options, headers });
   };
 
-  // 手动触发状态（仅供调试或由外部 Modal 补充逻辑使用，不污染真实鉴权流）
-  const login = () => { /* 真实环境由 onAuthStateChange 自动接管，此处留空即可 */ }; 
+  const login = () => {}; 
   
   const logout = async () => {
     if (supabase) {
@@ -134,11 +129,16 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setFavorites(newFavorites);
 
     const baseUrl = process.env.EXPO_PUBLIC_API_URL;
-    authFetch(`${baseUrl}/api/v1/user/favorites`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newFavorites)
-    }).catch(err => console.warn("后台同步失败", err));
+    // 🌟 已修复：加上了严格的环境变量拦截
+    if (baseUrl) {
+      authFetch(`${baseUrl}/api/v1/user/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newFavorites)
+      }).catch(err => console.warn("后台同步失败", err));
+    } else {
+      console.warn("⚠️ 未配置后端 API 环境变量，收藏操作仅本地生效");
+    }
 
     return true;
   };
@@ -148,7 +148,6 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   // ==========================
   const updateUsername = async (name: string) => {
     setUsername(name);
-    // 正式环境：不仅改内存，还要真正写入 Supabase 的 user_metadata 里
     if (supabase && session) {
       const { error } = await supabase.auth.updateUser({
         data: { username: name }
