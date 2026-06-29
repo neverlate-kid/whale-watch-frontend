@@ -3,7 +3,7 @@ import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
 import { getMarketStatus } from '@/utils/market';
-import { useMarketData } from '@/hooks/useMarketData';
+import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入 S3 Hook
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -48,10 +48,12 @@ export default function HomeScreen() {
         const json = await response.json();
 
         if (json.success && Array.isArray(json.data)) {
+          // 在轻量级列表里排序出前三名
           const sorted = [...json.data]
             .sort((a: any, b: any) => b.volatility_score - a.volatility_score)
             .slice(0, 3);
 
+          // 去取这前三名的详情(历史走势)并合并
           const detailedMovers = await Promise.all(
             sorted.map(async (stockItem: any) => {
               try {
@@ -66,7 +68,7 @@ export default function HomeScreen() {
           setBaseTopMovers(detailedMovers);
         }
       } catch (error) {
-        console.error("加载基础数据失败:", error);
+        console.error("加载首页底座数据失败:", error);
       } finally {
         setIsLoading(false);
       }
@@ -74,16 +76,19 @@ export default function HomeScreen() {
     fetchStocks();
   }, []);
 
-  // 🌟 核心引擎：合并 S3 与 历史数据
+  // 🌟 核心引擎：在图表数组里伪装塞入最新的 S3 节点
   const displayMovers = useMemo(() => {
     return baseTopMovers.map(stock => {
       const s3Info = realTimeData?.stocks?.[stock.ticker];
+      
       if (!s3Info) {
-        return { ...stock, livePrice: stock.price, liveChange: stock.change || 0 };
+        return { ...stock, livePrice: stock.price, isUp: stock.isUp };
       }
 
       const livePrice = s3Info.price;
-      const liveChange = livePrice - stock.price;
+      const prevPrice = stock.prev_price || stock.price; // 用后端的昨收价计算基准
+      const diff = livePrice - prevPrice;
+      const isUp = diff >= 0;
 
       let newDailyData = stock.daily_data_1y;
       if (newDailyData && newDailyData.length > 0) {
@@ -91,8 +96,11 @@ export default function HomeScreen() {
         const jstDateStr = dayjs(s3Info.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
         const todayOnlyDateStr = jstDateStr.split(' ')[0];
         const lastPoint = newDailyData[newDailyData.length - 1];
+        
+        // 组装实时的图表端点
         const newPoint = { date: jstDateStr, close: livePrice, volume: s3Info.volume };
         
+        // 今天的数据则覆盖，昨天的数据则新增
         if (lastPoint && lastPoint.date.startsWith(todayOnlyDateStr)) {
           newDailyData[newDailyData.length - 1] = newPoint;
         } else {
@@ -100,7 +108,7 @@ export default function HomeScreen() {
         }
       }
 
-      return { ...stock, livePrice, liveChange, daily_data_1y: newDailyData };
+      return { ...stock, livePrice, isUp, daily_data_1y: newDailyData };
     });
   }, [baseTopMovers, realTimeData]);
 
@@ -149,7 +157,7 @@ export default function HomeScreen() {
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={SCREEN_WIDTH - 40} decelerationRate="fast" contentContainerStyle={styles.scrollContent}>
           {displayMovers.map((stock) => {
             const chartData = period === '1Y' ? stock.daily_data_1y : stock.weekly_data_10y;
-            const isUp = stock.liveChange >= 0;
+            
             return (
               <View key={stock.ticker} style={[styles.mainCard, { backgroundColor: colors.card, borderColor: colors.border, width: SCREEN_WIDTH - 50 }]}>
                 <View style={{ flex: 1 }}>
@@ -163,8 +171,9 @@ export default function HomeScreen() {
                           return info[lang] || info.en;
                         })()}
                       </Text>
+                      {/* 🌟 大字实时报价区 */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <Text style={[styles.livePriceText, { color: isUp ? '#30D158' : '#FF453A' }]}>
+                        <Text style={[styles.livePriceText, { color: stock.isUp ? '#30D158' : '#FF453A' }]}>
                           ¥{stock.livePrice?.toLocaleString()}
                         </Text>
                         <View style={[styles.statusBadge, { backgroundColor: marketStatus === 'open' ? '#30D15820' : colors.border }]}>
@@ -186,14 +195,14 @@ export default function HomeScreen() {
                       <StockChart
                         ticker={stock.ticker}
                         data={chartData}
-                        color={isUp ? '#30D158' : '#FF453A'}
+                        color={stock.isUp ? '#30D158' : '#FF453A'}
                         textColor={colors.textSecondary}
                         borderColor={colors.border}
                         timeZoneMode={timeZoneMode}
                         onTimeZoneChange={setTimeZoneMode}
                         marketStatus={marketStatus}
                         isRefreshing={marketLoading}
-                        onRefresh={refetchLive}
+                        onRefresh={refetchLive} // 点击刷新直接触发 S3 数据获取
                       />
                     ) : (
                       <ActivityIndicator size="small" color={colors.textSecondary} />

@@ -18,7 +18,7 @@ export default function SearchScreen() {
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🌟 S3 钩子自动轮询
+  // 🌟 S3 数据自动轮询
   const { data: realTimeData } = useMarketData(60000);
 
   useEffect(() => {
@@ -42,22 +42,24 @@ export default function SearchScreen() {
     else setIsLoading(false);
   }, [searchQuery]);
 
-  // 🌟 数据融合：从 S3 获取实时价格并动态计算涨跌
+  // 🌟 数据融合计算
   const displayResults = useMemo(() => {
     return results.map(item => {
       const s3Info = realTimeData?.stocks?.[item.ticker];
+      
       if (!s3Info) return { ...item, livePrice: item.price, liveChange: item.change, isUp: item.isUp };
       
       const livePrice = s3Info.price;
-      const prevPrice = item.prev_price || item.price; // 用后端的昨收价做对比
+      const prevPrice = item.prev_price || item.price; 
       const diff = livePrice - prevPrice;
+      const isUp = diff >= 0;
       const pctStr = prevPrice ? ((diff / prevPrice) * 100).toFixed(2) : '0.00';
       
       return { 
         ...item, 
         livePrice, 
-        liveChange: `${diff >= 0 ? '+' : ''}${diff.toFixed(2)} (${pctStr}%)`, 
-        isUp: diff >= 0 
+        liveChange: `${isUp ? '+' : ''}${diff.toFixed(2)} (${pctStr}%)`, 
+        isUp
       };
     });
   }, [results, realTimeData]);
@@ -65,10 +67,8 @@ export default function SearchScreen() {
   const getLocalizedName = (ticker: string) => {
     const info = NIKKEI_225_DICT[ticker];
     if (!info) return ticker;
-    if (i18n.language === 'zh') return info.zh;
-    if (i18n.language === 'ja') return info.ja;
-    if (i18n.language === 'ko') return info.ko;
-    return info.en;
+    const lang = i18n.language.substring(0, 2) as keyof typeof info;
+    return (info as any)[lang] || info.en;
   };
 
   return (
@@ -121,28 +121,9 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 4 }, // 紧凑型顶边距，适配全局 Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginVertical: 12,
-    gap: 15
-  },
-  // 💡 这是全站标准的胶囊返回按钮样式
-  backCapsule: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 2
-  },
+  container: { flex: 1, paddingTop: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginVertical: 12, gap: 15 },
+  backCapsule: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 1, elevation: 2 },
   title: { fontSize: 18, fontWeight: '800' },
   resultCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderWidth: 1, borderRadius: 12 },
   tickerText: { fontSize: 16, fontWeight: '800' },

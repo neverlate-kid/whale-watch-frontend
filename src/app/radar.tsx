@@ -2,13 +2,14 @@ import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
-// 🌟 引入独立封装的统一登录组件
+// 引入全局登录组件与 S3 实时数据 Hook
 import { LoginModal } from '@/components/login-modal';
+import { useMarketData } from '@/hooks/useMarketData'; 
 
 export default function RadarScreen() {
   const { t, i18n } = useTranslation();
@@ -16,14 +17,14 @@ export default function RadarScreen() {
   const { isPremium, isLoggedIn } = useAppUser();
   const router = useRouter();
 
-  // 控制雷达页自己的登录弹窗状态
   const [loginModalVisible, setLoginModalVisible] = useState(false);
-
-  // 状态管理
   const [radarData, setRadarData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const hasAccess = isLoggedIn && isPremium;
+
+  // 🌟 挂载全局 S3 实时引擎
+  const { data: realTimeData } = useMarketData(60000);
 
   useEffect(() => {
     const fetchRadarData = async () => {
@@ -34,9 +35,7 @@ export default function RadarScreen() {
         const json = await response.json();
 
         if (json.success && Array.isArray(json.data)) {
-          // 后端取回全量数据后，按 volatility_score 排序
-          const sorted = [...json.data].sort((a, b) => b.volatility_score - a.volatility_score);
-          setRadarData(sorted);
+          setRadarData(json.data);
         }
       } catch (e) {
         console.error("加载雷达数据失败:", e);
@@ -47,8 +46,35 @@ export default function RadarScreen() {
     fetchRadarData();
   }, []);
 
-  // 根据权限截取数组
-  const displayData = hasAccess ? radarData : radarData.slice(0, 5);
+  // 🌟 核心引擎：融合 S3 数据并实时动态重新排序 (异动越大的自动排上面)
+  const displayData = useMemo(() => {
+    const mergedData = radarData.map(item => {
+      const s3Info = realTimeData?.stocks?.[item.ticker];
+      
+      // 如果没有 S3 数据，回退到后端的历史数据
+      if (!s3Info) {
+        return { ...item, livePrice: item.price, liveChange: item.change };
+      }
+
+      const livePrice = s3Info.price;
+      const prevPrice = item.prev_price || item.price; // 用后端的昨收价计算基准
+      const diff = livePrice - prevPrice;
+      const pct = prevPrice ? (diff / prevPrice) * 100 : 0;
+      const isUp = diff >= 0;
+
+      return {
+        ...item,
+        livePrice,
+        isUp,
+        liveChange: `${isUp ? '+' : ''}${diff.toFixed(2)} (${pct.toFixed(2)}%)`,
+        volatility_score: Math.abs(pct) // 实时刷新异动指数
+      };
+    });
+
+    // 重新排序并按权限截取
+    const sorted = mergedData.sort((a, b) => b.volatility_score - a.volatility_score);
+    return hasAccess ? sorted : sorted.slice(0, 5);
+  }, [radarData, realTimeData, hasAccess]);
 
   if (isLoading) {
     return (
@@ -60,7 +86,6 @@ export default function RadarScreen() {
 
   const handleBottomAction = () => {
     if (!isLoggedIn) {
-      // 🌟 唤起精美的全局复用登录组件
       setLoginModalVisible(true);
     } else {
       router.push('/profile');
@@ -127,21 +152,20 @@ export default function RadarScreen() {
                     const info = NIKKEI_225_DICT[item.ticker];
                     if (!info) return item.ticker;
                     const lang = i18n.language.substring(0, 2) as keyof typeof info;
-                    return info[lang] || info.en;
+                    return (info as any)[lang] || info.en;
                   })()}
                 </Text>
                 <Text style={[styles.nameText, { color: colors.textSecondary }]}>{t(item.ticker)}</Text>
               </View>
             </View>
             <View style={styles.rightCol}>
-              <Text style={[styles.priceText, { color: colors.textPrimary }]}>{item.price}</Text>
-              <Text style={[styles.changeText, { color: item.isUp ? '#30D158' : '#FF453A' }]}>{item.change}</Text>
+              <Text style={[styles.priceText, { color: colors.textPrimary }]}>¥{item.livePrice?.toLocaleString()}</Text>
+              <Text style={[styles.changeText, { color: item.isUp ? '#30D158' : '#FF453A' }]}>{item.liveChange}</Text>
             </View>
           </TouchableOpacity>
         )}
       />
 
-      {/* 🌟 渲染复用的登录组件 */}
       <LoginModal
         visible={loginModalVisible}
         onClose={() => setLoginModalVisible(false)}
