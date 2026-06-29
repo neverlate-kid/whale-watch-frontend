@@ -2,15 +2,15 @@ import { StockChart } from '@/components/stock-chart';
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
-import { getMarketStatus } from '@/utils/market';
 import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入 S3 Hook
+import { getMarketStatus } from '@/utils/market';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Animated, Dimensions, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Dimensions, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -22,13 +22,13 @@ export default function HomeScreen() {
   const { theme, colors } = useAppTheme();
   const { isPremium, isLoggedIn, favorites, toggleFavorite } = useAppUser();
   const router = useRouter();
-  
+
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
   const [period, setPeriod] = useState<'1Y' | '10Y'>('1Y');
 
   const [baseTopMovers, setBaseTopMovers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [toastMessage, setToastMessage] = useState('');
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const todayDate = dayjs().format('YYYY-MM-DD');
@@ -43,7 +43,12 @@ export default function HomeScreen() {
     const fetchStocks = async () => {
       setIsLoading(true);
       try {
-        const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        if (!baseUrl) {
+          console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)");
+          setIsLoading(false);
+          return;
+        }
         const response = await fetch(`${baseUrl}/api/v1/stocks`);
         const json = await response.json();
 
@@ -80,7 +85,7 @@ export default function HomeScreen() {
   const displayMovers = useMemo(() => {
     return baseTopMovers.map(stock => {
       const s3Info = realTimeData?.stocks?.[stock.ticker];
-      
+
       if (!s3Info) {
         return { ...stock, livePrice: stock.price, isUp: stock.isUp };
       }
@@ -96,10 +101,10 @@ export default function HomeScreen() {
         const jstDateStr = dayjs(s3Info.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
         const todayOnlyDateStr = jstDateStr.split(' ')[0];
         const lastPoint = newDailyData[newDailyData.length - 1];
-        
+
         // 组装实时的图表端点
         const newPoint = { date: jstDateStr, close: livePrice, volume: s3Info.volume };
-        
+
         // 今天的数据则覆盖，昨天的数据则新增
         if (lastPoint && lastPoint.date.startsWith(todayOnlyDateStr)) {
           newDailyData[newDailyData.length - 1] = newPoint;
@@ -157,7 +162,7 @@ export default function HomeScreen() {
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={SCREEN_WIDTH - 40} decelerationRate="fast" contentContainerStyle={styles.scrollContent}>
           {displayMovers.map((stock) => {
             const chartData = period === '1Y' ? stock.daily_data_1y : stock.weekly_data_10y;
-            
+
             return (
               <View key={stock.ticker} style={[styles.mainCard, { backgroundColor: colors.card, borderColor: colors.border, width: SCREEN_WIDTH - 50 }]}>
                 <View style={{ flex: 1 }}>
@@ -184,7 +189,7 @@ export default function HomeScreen() {
                         </View>
                       </View>
                     </View>
-                    
+
                     <TouchableOpacity style={styles.favTouchArea} onPress={() => handleFavoriteClick(stock.ticker)}>
                       <Text style={[{ fontSize: 22 }, getDiamondConfig(stock.ticker).style]}>💎</Text>
                     </TouchableOpacity>

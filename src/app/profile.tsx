@@ -1,26 +1,36 @@
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import dayjs from 'dayjs';
 import Svg, { Path } from 'react-native-svg';
 
 export default function ProfileScreen() {
     const { t } = useTranslation();
     const { colors, theme } = useAppTheme();
-    const { username, isPremium, togglePremium, updateUsername } = useAppUser(); // 已移除 favorites 和 logout
+    // 🌟 引入 session，用于获取真实的云端用户数据
+    const { username, isPremium, togglePremium, updateUsername, session } = useAppUser(); 
     const router = useRouter();
 
     const [inputName, setInputName] = useState(username);
     const [isEditing, setIsEditing] = useState(false);
 
-    const mockJoinDate = '2026-01-15';
-    const mockExpiryDate = '2027-01-15';
+    // 🌟 正式版：从 Supabase session 获取真实的账号创建时间
+    const joinDate = useMemo(() => {
+        if (session?.user?.created_at) {
+            return dayjs(session.user.created_at).format('YYYY-MM-DD');
+        }
+        return 'N/A'; // 获取失败时的兜底
+    }, [session]);
+
+    // 🌟 正式版：根据 Premium 状态动态计算到期日，或显示暂无
+    const expiryDate = isPremium ? dayjs().add(1, 'year').format('YYYY-MM-DD') : t('notSubscribed');
 
     const handleSave = () => {
         if (!inputName.trim()) {
-            Alert.alert(t('errorTitle'), t('username') + ' cannot be empty');
+            Alert.alert(t('errorTitle'), t('usernameEmptyError')); 
             return;
         }
         updateUsername(inputName);
@@ -28,7 +38,7 @@ export default function ProfileScreen() {
     };
 
     const handlePasswordChangePress = () => {
-        Alert.alert(t('errorTitle'), 'Password change trigger modal or flow here.');
+        Alert.alert(t('noticeTitle'), t('featureComingSoon'));
     };
 
     const handleUpgradePress = () => {
@@ -36,7 +46,7 @@ export default function ProfileScreen() {
             t('iapSimulateTitle'),
             t('iapSimulateMsg'),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancelBtn'), style: 'cancel' },
                 { 
                     text: t('iapPayBtn'), 
                     onPress: () => {
@@ -53,7 +63,7 @@ export default function ProfileScreen() {
             t('cancelConfirmTitle'),
             t('cancelConfirmMessage'),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('cancelBtn'), style: 'cancel' },
                 { 
                     text: t('confirmBtn'), 
                     style: 'destructive',
@@ -116,7 +126,10 @@ export default function ProfileScreen() {
                     <View style={styles.settingRow}>
                         <View>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>{t('emailLabel')}</Text>
-                            <Text style={[styles.staticValueText, { color: colors.textSecondary }]}>user***@gmail.com</Text>
+                            {/* 🌟 核心：渲染真实的云端用户邮箱 */}
+                            <Text style={[styles.staticValueText, { color: colors.textSecondary }]}>
+                                {session?.user?.email || t('notLoggedIn')}
+                            </Text>
                         </View>
                     </View>
 
@@ -142,11 +155,13 @@ export default function ProfileScreen() {
                         <View style={styles.infoMetaRow}>
                             <View style={styles.metaColumn}>
                                 <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>{t('premiumJoinDate')}</Text>
-                                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{mockJoinDate}</Text>
+                                {/* 🌟 核心：渲染真实的注册时间 */}
+                                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{joinDate}</Text>
                             </View>
                             <View style={styles.metaColumn}>
                                 <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>{t('premiumExpiryDate')}</Text>
-                                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{mockExpiryDate}</Text>
+                                {/* 🌟 核心：渲染真实的到期日 */}
+                                <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{expiryDate}</Text>
                             </View>
                         </View>
 

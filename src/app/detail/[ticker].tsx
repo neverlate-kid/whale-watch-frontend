@@ -1,15 +1,15 @@
 import { StockChart } from '@/components/stock-chart';
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
-import { getMarketStatus } from '@/utils/market';
 import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入刚创建的 S3 Hook
+import { getMarketStatus } from '@/utils/market';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 dayjs.extend(utc);
@@ -25,7 +25,7 @@ export default function DetailScreen() {
   const [stock, setStock] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
-  
+
   // 🌟 挂载全局 S3 数据 Hook（统一从云端获取 225 只股票的最新状态）
   const { data: realTimeData, loading: isRefreshingLive, refetch: refetchLive } = useMarketData(60000);
 
@@ -35,8 +35,13 @@ export default function DetailScreen() {
       if (!ticker) return;
       setIsLoading(true);
       try {
-        const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
-        const response = await fetch(`${baseUrl}/api/v1/stocks/${ticker}`);
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        if (!baseUrl) {
+          console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)");
+          setIsLoading(false);
+          return;
+        }
+        const response = await fetch(`${baseUrl}/api/v1/stocks`);
         const json = await response.json();
 
         if (json.success) {
@@ -57,24 +62,24 @@ export default function DetailScreen() {
 
     const tickerStr = typeof ticker === 'string' ? ticker : ticker?.[0];
     const liveInfo = realTimeData.stocks[tickerStr as string];
-    
+
     if (liveInfo) {
       setStock((prev: any) => {
         if (!prev) return prev;
         const updatedStock = { ...prev };
         updatedStock.price = liveInfo.price;
-        
+
         if (updatedStock.daily_data_1y) {
           const newDataArray = [...updatedStock.daily_data_1y];
           const lastPoint = newDataArray[newDataArray.length - 1];
-          
+
           // 解析 S3 传来的 timestamp，转换为 JST 格式，供图表组件消费
           const jstDateStr = dayjs(liveInfo.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
           const todayOnlyDateStr = jstDateStr.split(' ')[0];
-          
+
           const isLastPointToday = lastPoint && lastPoint.date.startsWith(todayOnlyDateStr);
           const newPoint = { date: jstDateStr, close: liveInfo.price, volume: liveInfo.volume };
-          
+
           // 如果数组最后一个点是今天，就覆盖它；如果是昨天，就 push 新的一天
           if (isLastPointToday) {
             newDataArray[newDataArray.length - 1] = newPoint;
@@ -146,7 +151,7 @@ export default function DetailScreen() {
               borderColor={colors.border}
               timeZoneMode={timeZoneMode}
               onTimeZoneChange={setTimeZoneMode}
-              
+
               // 直接传入 hook 里的状态，图表内部的刷新动画会自动触发
               marketStatus={getMarketStatus()}
               isRefreshing={isRefreshingLive}

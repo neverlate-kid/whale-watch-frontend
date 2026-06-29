@@ -1,11 +1,11 @@
 import { isMatchSearch, NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { useMarketData } from '@/hooks/useMarketData';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 
 export default function SearchScreen() {
   const { t, i18n } = useTranslation();
@@ -25,7 +25,12 @@ export default function SearchScreen() {
     const fetchAndFilterStocks = async () => {
       setIsLoading(true);
       try {
-        const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        if (!baseUrl) {
+          console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)");
+          setIsLoading(false);
+          return;
+        }
         const response = await fetch(`${baseUrl}/api/v1/stocks`);
         const json = await response.json();
         if (json.success) {
@@ -46,19 +51,19 @@ export default function SearchScreen() {
   const displayResults = useMemo(() => {
     return results.map(item => {
       const s3Info = realTimeData?.stocks?.[item.ticker];
-      
+
       if (!s3Info) return { ...item, livePrice: item.price, liveChange: item.change, isUp: item.isUp };
-      
+
       const livePrice = s3Info.price;
-      const prevPrice = item.prev_price || item.price; 
+      const prevPrice = item.prev_price || item.price;
       const diff = livePrice - prevPrice;
       const isUp = diff >= 0;
       const pctStr = prevPrice ? ((diff / prevPrice) * 100).toFixed(2) : '0.00';
-      
-      return { 
-        ...item, 
-        livePrice, 
-        liveChange: `${isUp ? '+' : ''}${diff.toFixed(2)} (${pctStr}%)`, 
+
+      return {
+        ...item,
+        livePrice,
+        liveChange: `${isUp ? '+' : ''}${diff.toFixed(2)} (${pctStr}%)`,
         isUp
       };
     });

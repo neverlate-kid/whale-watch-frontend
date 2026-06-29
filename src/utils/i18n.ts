@@ -116,6 +116,12 @@ const resources = {
       searchPlaceholder: "搜索代码、名称或状态(涨/跌)...",
       searchPrefix: "您正在搜索词条:",
       stockLoadError: "无法加载股票数据",
+      noticeTitle: "提示",
+      featureComingSoon: "修改密码功能开发中，敬请期待！",
+      notSubscribed: "暂无",
+      usernameEmptyError: "用户名不能为空",
+      notLoggedIn: "未登录",
+      cancelBtn: "取消",
     }
   },
   en: {
@@ -224,6 +230,12 @@ const resources = {
       searchPlaceholder: "Search ticker, name, or status (up/down)...",
       searchPrefix: "Searching for term:",
       stockLoadError: "Failed to load stock data",
+      noticeTitle: "Notice",
+      featureComingSoon: "Password change feature is coming soon!",
+      notSubscribed: "N/A",
+      usernameEmptyError: "Username cannot be empty.",
+      notLoggedIn: "Not logged in",
+      cancelBtn: "Cancel",
     }
   },
   ja: {
@@ -332,6 +344,12 @@ const resources = {
       searchPlaceholder: "銘柄コード、名称、または状態(上昇/下落)で検索...",
       searchPrefix: "検索中のキーワード:",
       stockLoadError: "株価データを読み込めませんでした",
+      noticeTitle: "お知らせ",
+      featureComingSoon: "パスワード変更機能は開発中です。お楽しみに！",
+      notSubscribed: "なし",
+      usernameEmptyError: "ユーザー名は空にできません。",
+      notLoggedIn: "未ログイン",
+      cancelBtn: "キャンセル",
     }
   },
   ko: {
@@ -440,6 +458,12 @@ const resources = {
       searchPlaceholder: "티커, 이름 또는 상태(상승/하락) 검색...",
       searchPrefix: "검색 중인 키워드:",
       stockLoadError: "주식 데이터를 불러올 수 없습니다",
+      noticeTitle: "알림",
+      featureComingSoon: "비밀번호 변경 기능은 개발 중입니다!",
+      notSubscribed: "없음",
+      usernameEmptyError: "사용자 이름은 비워 둘 수 없습니다.",
+      notLoggedIn: "로그인되지 않음",
+      cancelBtn: "취소",
     }
   }
 };

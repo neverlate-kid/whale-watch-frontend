@@ -1,15 +1,15 @@
+import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
-import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useRouter } from 'expo-router';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 // 引入全局登录组件与 S3 实时数据 Hook
 import { LoginModal } from '@/components/login-modal';
-import { useMarketData } from '@/hooks/useMarketData'; 
+import { useMarketData } from '@/hooks/useMarketData';
 
 export default function RadarScreen() {
   const { t, i18n } = useTranslation();
@@ -30,7 +30,12 @@ export default function RadarScreen() {
     const fetchRadarData = async () => {
       setIsLoading(true);
       try {
-        const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        if (!baseUrl) {
+          console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)");
+          setIsLoading(false);
+          return;
+        }
         const response = await fetch(`${baseUrl}/api/v1/stocks`);
         const json = await response.json();
 
@@ -50,7 +55,7 @@ export default function RadarScreen() {
   const displayData = useMemo(() => {
     const mergedData = radarData.map(item => {
       const s3Info = realTimeData?.stocks?.[item.ticker];
-      
+
       // 如果没有 S3 数据，回退到后端的历史数据
       if (!s3Info) {
         return { ...item, livePrice: item.price, liveChange: item.change };
