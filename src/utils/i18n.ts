@@ -130,6 +130,8 @@ const resources = {
       confirmNewPassword: "确认新密码",
       passwordUpdated: "密码修改成功",
       passwordUpdateFailed: "密码修改失败",
+      recentNews: "近期相关资讯",
+      noNewsFound: "暂无近期资讯",
     }
   },
   en: {
@@ -252,6 +254,8 @@ const resources = {
       confirmNewPassword: "Confirm New Password",
       passwordUpdated: "Password updated successfully.",
       passwordUpdateFailed: "Failed to update password.",
+      recentNews: "Recent News",
+      noNewsFound: "No recent news found.",
     }
   },
   ja: {
@@ -374,6 +378,8 @@ const resources = {
       confirmNewPassword: "新しいパスワード（確認）",
       passwordUpdated: "パスワードが正常に変更されました。",
       passwordUpdateFailed: "パスワードの変更に失敗しました。",
+      recentNews: "関連ニュース",
+      noNewsFound: "最近のニュースはありません",
     }
   },
   ko: {
@@ -496,6 +502,8 @@ const resources = {
       confirmNewPassword: "새 비밀번호 확인",
       passwordUpdated: "비밀번호가 성공적으로 변경되었습니다.",
       passwordUpdateFailed: "비밀번호 변경에 실패했습니다.",
+      recentNews: "최근 관련 뉴스",
+      noNewsFound: "최근 뉴스가 없습니다",
     }
   }
 };

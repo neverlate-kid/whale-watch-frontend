@@ -1,4 +1,5 @@
 import { StockChart } from '@/components/stock-chart';
+import { RecentNews, NewsItem } from '@/components/recent-news'; // 🌟 引入独立的新闻组件
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useMarketData } from '@/hooks/useMarketData'; 
@@ -21,18 +22,18 @@ export default function DetailScreen() {
   const { colors } = useAppTheme();
   const router = useRouter();
 
-  // 本地/后端的历史数据状态
+  // 状态管理
   const [stock, setStock] = useState<any>(null);
+  const [news, setNews] = useState<NewsItem[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
 
-  // 🌟 挂载全局 S3 数据 Hook
+  // S3 实时数据 Hook
   const { data: realTimeData, loading: isRefreshingLive, refetch: refetchLive } = useMarketData(60000);
 
-  // 1. 获取后端 FastAPI 的历史数据 (只在首次加载执行)
+  // 1. 获取图表历史数据 + 新闻资讯
   useEffect(() => {
-    const fetchStockDetail = async () => {
-      // 兼容 Expo Router 参数可能是数组的情况
+    const fetchDetailAndNews = async () => {
       const tickerStr = typeof ticker === 'string' ? ticker : ticker?.[0];
       if (!tickerStr) return;
       
@@ -40,28 +41,35 @@ export default function DetailScreen() {
       try {
         const baseUrl = process.env.EXPO_PUBLIC_API_URL;
         if (!baseUrl) {
-          console.warn("⚠️ 未配置后端 API 环境变量 (EXPO_PUBLIC_API_URL)");
+          console.warn("⚠️ 未配置后端 API 环境变量");
           setIsLoading(false);
           return;
         }
-        
-        // 🌟 已修复：精准请求单只股票的详情数据！
-        const response = await fetch(`${baseUrl}/api/v1/stocks/${tickerStr}`);
-        const json = await response.json();
 
-        if (json.success) {
-          setStock(json.data);
-        }
+        // 获取当前 App 的语言前缀 (zh, en, ja, ko)
+        const currentLang = i18n.language.substring(0, 2);
+        
+        const [detailRes, newsRes] = await Promise.all([
+          fetch(`${baseUrl}/api/v1/stocks/${tickerStr}`),
+          fetch(`${baseUrl}/api/v1/stocks/${tickerStr}/news?lang=${currentLang}`) 
+        ]);
+
+        const detailJson = await detailRes.json();
+        const newsJson = await newsRes.json();
+
+        if (detailJson.success) setStock(detailJson.data);
+        if (newsJson.success) setNews(newsJson.data);
+
       } catch (e) {
-        console.error("Failed loading stock information:", e);
+        console.error("Failed loading stock detail:", e);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchStockDetail();
-  }, [ticker]);
+    fetchDetailAndNews();
+  }, [ticker, i18n.language]);
 
-  // 2. 🌟 核心逻辑：监听 S3 实时数据变化，自动将最新价格拼接到历史图表数组中
+  // 2. 监听 S3 实时数据变化拼接最新价格
   useEffect(() => {
     if (!stock || !realTimeData || !realTimeData.stocks) return;
 
@@ -78,19 +86,15 @@ export default function DetailScreen() {
           const newDataArray = [...updatedStock.daily_data_1y];
           const lastPoint = newDataArray[newDataArray.length - 1];
 
-          // 解析 S3 传来的 timestamp，转换为 JST 格式，供图表组件消费
           const jstDateStr = dayjs(liveInfo.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
           const todayOnlyDateStr = jstDateStr.split(' ')[0];
 
           const isLastPointToday = lastPoint && lastPoint.date.startsWith(todayOnlyDateStr);
           const newPoint = { date: jstDateStr, close: liveInfo.price, volume: liveInfo.volume };
 
-          // 如果数组最后一个点是今天，就覆盖它；如果是昨天，就 push 新的一天
-          if (isLastPointToday) {
-            newDataArray[newDataArray.length - 1] = newPoint;
-          } else {
-            newDataArray.push(newPoint);
-          }
+          if (isLastPointToday) newDataArray[newDataArray.length - 1] = newPoint;
+          else newDataArray.push(newPoint);
+          
           updatedStock.daily_data_1y = newDataArray;
         }
         return updatedStock;
@@ -98,10 +102,9 @@ export default function DetailScreen() {
     }
   }, [realTimeData, ticker]);
 
-  // 🌟 覆盖原有的刷新方法
   const handleRefreshLivePrice = async () => {
     if (getMarketStatus() === 'closed') return;
-    refetchLive(); // 触发 Hook 重新拉取
+    refetchLive(); 
   };
 
   if (isLoading) {
@@ -122,7 +125,7 @@ export default function DetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollBody}>
+      <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
         <StatusBar barStyle={colors.statusBarStyle} />
 
         <View style={styles.header}>
@@ -138,6 +141,7 @@ export default function DetailScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* 乐高模块 1：图表组件 */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.tickerCode, { color: colors.textPrimary }]}>
             {(() => {
@@ -151,20 +155,21 @@ export default function DetailScreen() {
             <StockChart
               ticker={ticker as string}
               data={stock.daily_data_1y}
-              // 判断涨跌：可以用 S3 的最新价减去后端传来的 prev_price (如果没有 prev_price，默认是绿的即可，或者依靠 index 传参)
               color={stock.isUp !== undefined ? (stock.isUp ? '#30D158' : '#FF453A') : '#30D158'}
               textColor={colors.textSecondary}
               borderColor={colors.border}
               timeZoneMode={timeZoneMode}
               onTimeZoneChange={setTimeZoneMode}
-
-              // 直接传入 hook 里的状态，图表内部的刷新动画会自动触发
               marketStatus={getMarketStatus()}
               isRefreshing={isRefreshingLive}
               onRefresh={handleRefreshLivePrice}
             />
           </View>
         </View>
+
+        {/* 乐高模块 2：近期新闻流组件 */}
+        <RecentNews news={news} />
+
       </ScrollView>
     </View>
   );
@@ -175,6 +180,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginVertical: 8, gap: 15 },
   backCapsule: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 1, elevation: 1 },
   scrollBody: { paddingBottom: 40 },
+  
+  // 图表区域样式
   card: { borderRadius: 14, padding: 18, borderWidth: 1, marginHorizontal: 20 },
   tickerCode: { fontSize: 20, fontWeight: '900', fontFamily: 'monospace', marginBottom: 10 },
   chartWrapper: { minHeight: 220, justifyContent: 'center' },
