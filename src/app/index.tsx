@@ -2,16 +2,16 @@ import { StockChart } from '@/components/stock-chart';
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
-import { getMarketStatus } from '@/utils/market'; // 🌟 引入刚刚创建的股市状态函数
+import { getMarketStatus } from '@/utils/market';
+import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入 S3 全局数据钩子
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
 import { useRouter } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Animated, Dimensions, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// 确保时区插件注册 (用于解析 YF 时间戳)
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -22,20 +22,25 @@ export default function HomeScreen() {
   const { theme, colors } = useAppTheme();
   const { isPremium, isLoggedIn, favorites, toggleFavorite } = useAppUser();
   const router = useRouter();
+  
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
   const [period, setPeriod] = useState<'1Y' | '10Y'>('1Y');
 
-  const [topMovers, setTopMovers] = useState<any[]>([]);
+  // 后端数据库基础数据状态
+  const [baseTopMovers, setBaseTopMovers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
   const [toastMessage, setToastMessage] = useState('');
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const todayDate = dayjs().format('YYYY-MM-DD');
 
-  // 🌟 新增：由于首页有3个图表，我们需要用 Set 来独立记录哪个股票正在转菊花
-  const [refreshingTickers, setRefreshingTickers] = useState<Set<string>>(new Set());
-
   const hasAccess = isLoggedIn && isPremium;
+  const marketStatus = getMarketStatus();
 
+  // 🌟 挂载 S3 全局实时数据 Hook
+  const { data: realTimeData, loading: marketLoading, refetch: refetchLive } = useMarketData(60000);
+
+  // 1. 获取后端基础数据 (只在首次加载执行)
   useEffect(() => {
     const fetchStocks = async () => {
       setIsLoading(true);
@@ -54,25 +59,63 @@ export default function HomeScreen() {
               try {
                 const detailResponse = await fetch(`${baseUrl}/api/v1/stocks/${stockItem.ticker}`);
                 const detailJson = await detailResponse.json();
-                if (detailJson.success) {
-                  return { ...stockItem, ...detailJson.data };
-                }
-                return stockItem;
+                return detailJson.success ? { ...stockItem, ...detailJson.data } : stockItem;
               } catch (e) {
                 return stockItem;
               }
             })
           );
-          setTopMovers(detailedMovers);
+          setBaseTopMovers(detailedMovers);
         }
       } catch (error) {
-        console.error("加载数据失败:", error);
+        console.error("加载基础数据失败:", error);
       } finally {
         setIsLoading(false);
       }
     };
     fetchStocks();
   }, []);
+
+  // 2. 🌟 核心引擎：在内存中将后端历史数据与 S3 实时数据进行“无缝融合”
+  const displayMovers = useMemo(() => {
+    return baseTopMovers.map(stock => {
+      // 尝试从 S3 JSON 字典中获取该股票的最新状态
+      const s3Info = realTimeData?.stocks?.[stock.ticker];
+      
+      // 如果 S3 没有数据（或者还没加载出来），回退到使用数据库的昨日收盘价
+      if (!s3Info) {
+        return { ...stock, livePrice: stock.price, liveChange: stock.change || 0 };
+      }
+
+      const livePrice = s3Info.price;
+      // 实时涨跌幅 = 现在的价格 - 昨天数据库里的收盘价
+      const liveChange = livePrice - stock.price;
+
+      // 实时处理图表 K 线拼接
+      let newDailyData = stock.daily_data_1y;
+      if (newDailyData && newDailyData.length > 0) {
+        newDailyData = [...newDailyData];
+        const jstDateStr = dayjs(s3Info.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
+        const todayOnlyDateStr = jstDateStr.split(' ')[0];
+        const lastPoint = newDailyData[newDailyData.length - 1];
+        
+        const newPoint = { date: jstDateStr, close: livePrice, volume: s3Info.volume };
+        
+        if (lastPoint && lastPoint.date.startsWith(todayOnlyDateStr)) {
+          newDailyData[newDailyData.length - 1] = newPoint; // 覆盖今天
+        } else {
+          newDailyData.push(newPoint); // 开启新的一天
+        }
+      }
+
+      return {
+        ...stock,
+        livePrice,
+        liveChange,
+        daily_data_1y: newDailyData
+      };
+    });
+  }, [baseTopMovers, realTimeData]);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -85,85 +128,10 @@ export default function HomeScreen() {
   };
 
   const handleFavoriteClick = (ticker: string) => {
-    if (!isLoggedIn) {
-      showToast(`🔐 ${t('loginRequired')}`);
-      return;
-    }
-    if (!isPremium) {
-      showToast(`🔒 ${t('memberExclusive')}`);
-      return;
-    }
-    const isCurrentlyFav = favorites.includes(ticker);
+    if (!isLoggedIn) return showToast(`🔐 ${t('loginRequired')}`);
+    if (!isPremium) return showToast(`🔒 ${t('memberExclusive')}`);
     toggleFavorite(ticker);
-    showToast(isCurrentlyFav ? t('favRemoved', { ticker }) : t('favAdded', { ticker }));
-  };
-
-  // 🌟 核心逻辑：在客户端直接请求 Yahoo Finance 抓取实时数据并拼接
-  const handleRefreshLivePrice = async (ticker: string) => {
-    // 1. 防御：如果已收盘，直接拒绝请求
-    if (getMarketStatus() === 'closed') {
-      showToast(`🌙 ${t('marketClosed')}`);
-      return;
-    }
-
-    // 2. 开启菊花 loading
-    setRefreshingTickers(prev => new Set(prev).add(ticker));
-
-    try {
-      // 雅虎财经的日股代码通常需要加 ".T" (例如丰田是 7203.T)
-      const yfTicker = /^\d{4}$/.test(ticker) ? `${ticker}.T` : ticker;
-
-      // 使用客户端 fetch 直接请求 YF 的轻量级 chart 接口
-      const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yfTicker}?interval=1m&range=1d`);
-      const json = await response.json();
-      const meta = json.chart.result[0].meta;
-
-      const currentPrice = meta.regularMarketPrice;
-      const currentVolume = meta.regularMarketVolume;
-      const timestamp = meta.regularMarketTime; // Unix 秒数
-
-      // 3. 将 YF 传回的时间戳，强制格式化为纯正的 JST 东京时间字符串 (YYYY-MM-DD HH:mm:ss)
-      const jstDateStr = dayjs.unix(timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
-      const todayOnlyDateStr = jstDateStr.split(' ')[0];
-
-      // 4. 将新数据合并入前端状态，触发图表重绘
-      setTopMovers(prev => prev.map(stock => {
-        if (stock.ticker === ticker) {
-          const updatedStock = { ...stock };
-          updatedStock.price = currentPrice; // 更新外层大字体的价格
-
-          if (updatedStock.daily_data_1y) {
-            const newDataArray = [...updatedStock.daily_data_1y];
-            const lastPoint = newDataArray[newDataArray.length - 1];
-
-            // 判断数组最后一个点是否已经是今天的点了
-            const isLastPointToday = lastPoint && lastPoint.date.startsWith(todayOnlyDateStr);
-            const newPoint = { date: jstDateStr, close: currentPrice, volume: currentVolume };
-
-            if (isLastPointToday) {
-              // 如果最后一个点是今天的（无论是后端给的空日期，还是之前拼过一次的），直接替换
-              newDataArray[newDataArray.length - 1] = newPoint;
-            } else {
-              // 否则把新点 push 到末尾
-              newDataArray.push(newPoint);
-            }
-            updatedStock.daily_data_1y = newDataArray;
-          }
-          return updatedStock;
-        }
-        return stock;
-      }));
-    } catch (error) {
-      console.error("YF Refresh Error:", error);
-      showToast(`❌ ${t('refreshFailed', '刷新失败')}`);
-    } finally {
-      // 3. 关闭菊花 loading
-      setRefreshingTickers(prev => {
-        const next = new Set(prev);
-        next.delete(ticker);
-        return next;
-      });
-    }
+    showToast(favorites.includes(ticker) ? t('favRemoved', { ticker }) : t('favAdded', { ticker }));
   };
 
   const getDiamondConfig = (ticker: string) => {
@@ -192,23 +160,38 @@ export default function HomeScreen() {
 
       <View style={styles.carouselContainer}>
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} snapToInterval={SCREEN_WIDTH - 40} decelerationRate="fast" contentContainerStyle={styles.scrollContent}>
-          {topMovers.map((stock) => {
+          {displayMovers.map((stock) => {
             const chartData = period === '1Y' ? stock.daily_data_1y : stock.weekly_data_10y;
-            const diamondConfig = getDiamondConfig(stock.ticker);
+            const isUp = stock.liveChange >= 0;
             return (
               <View key={stock.ticker} style={[styles.mainCard, { backgroundColor: colors.card, borderColor: colors.border, width: SCREEN_WIDTH - 50 }]}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.tickerRow}>
-                    <Text style={[styles.codeText, { color: colors.textPrimary }]}>
-                      {(() => {
-                        const info = NIKKEI_225_DICT[stock.ticker];
-                        if (!info) return stock.ticker;
-                        const lang = i18n.language.substring(0, 2) as keyof typeof info;
-                        return info[lang] || info.en;
-                      })()}
-                    </Text>
+                    <View>
+                      <Text style={[styles.codeText, { color: colors.textPrimary }]}>
+                        {(() => {
+                          const info = NIKKEI_225_DICT[stock.ticker];
+                          if (!info) return stock.ticker;
+                          const lang = i18n.language.substring(0, 2) as keyof typeof info;
+                          return info[lang] || info.en;
+                        })()}
+                      </Text>
+                      {/* 大字报价区 */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Text style={[styles.livePriceText, { color: isUp ? '#30D158' : '#FF453A' }]}>
+                          ¥{stock.livePrice?.toLocaleString()}
+                        </Text>
+                        <View style={[styles.statusBadge, { backgroundColor: marketStatus === 'open' ? '#30D15820' : colors.border }]}>
+                          <View style={[styles.statusDot, { backgroundColor: marketStatus === 'open' ? '#30D158' : colors.textSecondary }]} />
+                          <Text style={[styles.statusText, { color: marketStatus === 'open' ? '#30D158' : colors.textSecondary }]}>
+                            {marketStatus === 'open' ? t('statusLive') : t('statusClosed')}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                    
                     <TouchableOpacity style={styles.favTouchArea} onPress={() => handleFavoriteClick(stock.ticker)}>
-                      <Text style={[{ fontSize: 22 }, diamondConfig.style]}>💎</Text>
+                      <Text style={[{ fontSize: 22 }, getDiamondConfig(stock.ticker).style]}>💎</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -217,16 +200,14 @@ export default function HomeScreen() {
                       <StockChart
                         ticker={stock.ticker}
                         data={chartData}
-                        color={stock.isUp ? '#30D158' : '#FF453A'}
+                        color={isUp ? '#30D158' : '#FF453A'}
                         textColor={colors.textSecondary}
                         borderColor={colors.border}
                         timeZoneMode={timeZoneMode}
-                        onTimeZoneChange={(mode) => setTimeZoneMode(mode)}
-
-                        // 🌟 将刚写好的状态和事件绑定给图表
-                        marketStatus={getMarketStatus()}
-                        isRefreshing={refreshingTickers.has(stock.ticker)}
-                        onRefresh={() => handleRefreshLivePrice(stock.ticker)}
+                        onTimeZoneChange={setTimeZoneMode}
+                        marketStatus={marketStatus}
+                        isRefreshing={marketLoading} // S3 正在请求时，触发内部加载动画
+                        onRefresh={refetchLive}      // 点击刷新按钮直接拉取 S3
                       />
                     ) : (
                       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -267,11 +248,15 @@ const styles = StyleSheet.create({
   carouselContainer: { flex: 1, marginVertical: 12 },
   scrollContent: { paddingHorizontal: 25, gap: 15 },
   mainCard: { borderRadius: 16, padding: 20, borderWidth: 1, justifyContent: 'space-between', height: '100%' },
-  tickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  codeText: { fontSize: 16, fontWeight: '800', fontFamily: 'monospace' },
+  tickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  codeText: { fontSize: 16, fontWeight: '800' },
+  livePriceText: { fontSize: 24, fontWeight: '900', fontFamily: 'monospace', marginRight: 10 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  statusDot: { width: 6, height: 6, borderRadius: 3, marginRight: 4 },
+  statusText: { fontSize: 9, fontWeight: '800' },
   favTouchArea: { padding: 6, justifyContent: 'center', alignItems: 'center' },
   chartWrapper: { justifyContent: 'center', marginTop: 12 },
-  tabBar: { flexDirection: 'row', padding: 4, borderRadius: 10, borderWidth: 1 },
+  tabBar: { flexDirection: 'row', padding: 4, borderRadius: 10, borderWidth: 1, marginTop: 10 },
   tabButton: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   tabText: { fontSize: 11, fontWeight: '700' },
   primaryButton: { borderWidth: 2, borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginHorizontal: 20 },

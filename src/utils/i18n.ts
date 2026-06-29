@@ -1,3 +1,4 @@
+// src/utils/i18n.ts
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -28,6 +29,12 @@ const resources = {
       todayWhale: "今日异动最大股票榜 (Top 3)",
       radarTitle: "日经 225 全量异动雷达",
       whaleScore: "异动指数",
+      
+      // 🌟 新增：价格状态标签
+      statusLive: "实时",
+      statusClosed: "已收盘",
+      statusFetching: "获取中...",
+
       aiAnalysis: "AI 智能综合研判",
       aiOpinion: "AI 独家点评",
       newsTitle: "近期机构异动动向精选",
@@ -131,6 +138,11 @@ const resources = {
       todayWhale: "Whale Anomalies Today (Top 3)",
       radarTitle: "Nikkei 225 Full-Scan Radar",
       whaleScore: "Whale Score",
+
+      statusLive: "LIVE",
+      statusClosed: "CLOSED",
+      statusFetching: "Loading...",
+
       aiAnalysis: "AI Comprehensive Analytics",
       aiOpinion: "AI Analysis",
       newsTitle: "Recent Institutional Shifts",
@@ -234,6 +246,11 @@ const resources = {
       todayWhale: "本日の大口異動ランキング (Top 3)",
       radarTitle: "日経 225 全量異動レーダー",
       whaleScore: "クジラスコア",
+
+      statusLive: "リアルタイム",
+      statusClosed: "取引終了",
+      statusFetching: "取得中...",
+
       aiAnalysis: "AI知能総合判定",
       aiOpinion: "AI独占見解",
       newsTitle: "最近の機関投資家動向セレクション",
@@ -337,6 +354,11 @@ const resources = {
       todayWhale: "오늘의 기관 대량 체결 종목 (Top 3)",
       radarTitle: "닛케이 225 전량 이상동향 레이더",
       whaleScore: "고래 점수",
+
+      statusLive: "실시간",
+      statusClosed: "장 마감",
+      statusFetching: "불러오는 중...",
+
       aiAnalysis: "AI 인공지능 종합 진단",
       aiOpinion: "AI 독점 분석",
       newsTitle: "최근 기관 투자자 동향 동향",
