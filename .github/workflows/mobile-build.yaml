@@ -1,0 +1,29 @@
+name: Deploy Mobile Build
+
+on:
+  push:
+    branches:
+      - main1
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v3
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18 # 推荐 18 或 20
+
+      - name: 安装 EAS CLI
+        run: npm install -g eas-cli
+
+      - name: 安装项目依赖
+        run: npm install
+
+      - name: 运行 EAS 构建
+        run: eas build --platform all --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }} # 🌟 这是最关键的：你需要去 Expo 官网申请这个 Token
