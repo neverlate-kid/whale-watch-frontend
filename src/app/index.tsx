@@ -3,7 +3,7 @@ import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useAppUser } from '@/context/user-context';
 import { getMarketStatus } from '@/utils/market';
-import { useMarketData } from '@/hooks/useMarketData'; // 🌟 引入 S3 全局数据钩子
+import { useMarketData } from '@/hooks/useMarketData';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
 import utc from 'dayjs/plugin/utc';
@@ -26,7 +26,6 @@ export default function HomeScreen() {
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
   const [period, setPeriod] = useState<'1Y' | '10Y'>('1Y');
 
-  // 后端数据库基础数据状态
   const [baseTopMovers, setBaseTopMovers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -37,10 +36,9 @@ export default function HomeScreen() {
   const hasAccess = isLoggedIn && isPremium;
   const marketStatus = getMarketStatus();
 
-  // 🌟 挂载 S3 全局实时数据 Hook
+  // 🌟 挂载全局 S3 数据
   const { data: realTimeData, loading: marketLoading, refetch: refetchLive } = useMarketData(60000);
 
-  // 1. 获取后端基础数据 (只在首次加载执行)
   useEffect(() => {
     const fetchStocks = async () => {
       setIsLoading(true);
@@ -76,44 +74,33 @@ export default function HomeScreen() {
     fetchStocks();
   }, []);
 
-  // 2. 🌟 核心引擎：在内存中将后端历史数据与 S3 实时数据进行“无缝融合”
+  // 🌟 核心引擎：合并 S3 与 历史数据
   const displayMovers = useMemo(() => {
     return baseTopMovers.map(stock => {
-      // 尝试从 S3 JSON 字典中获取该股票的最新状态
       const s3Info = realTimeData?.stocks?.[stock.ticker];
-      
-      // 如果 S3 没有数据（或者还没加载出来），回退到使用数据库的昨日收盘价
       if (!s3Info) {
         return { ...stock, livePrice: stock.price, liveChange: stock.change || 0 };
       }
 
       const livePrice = s3Info.price;
-      // 实时涨跌幅 = 现在的价格 - 昨天数据库里的收盘价
       const liveChange = livePrice - stock.price;
 
-      // 实时处理图表 K 线拼接
       let newDailyData = stock.daily_data_1y;
       if (newDailyData && newDailyData.length > 0) {
         newDailyData = [...newDailyData];
         const jstDateStr = dayjs(s3Info.timestamp).tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm:ss');
         const todayOnlyDateStr = jstDateStr.split(' ')[0];
         const lastPoint = newDailyData[newDailyData.length - 1];
-        
         const newPoint = { date: jstDateStr, close: livePrice, volume: s3Info.volume };
         
         if (lastPoint && lastPoint.date.startsWith(todayOnlyDateStr)) {
-          newDailyData[newDailyData.length - 1] = newPoint; // 覆盖今天
+          newDailyData[newDailyData.length - 1] = newPoint;
         } else {
-          newDailyData.push(newPoint); // 开启新的一天
+          newDailyData.push(newPoint);
         }
       }
 
-      return {
-        ...stock,
-        livePrice,
-        liveChange,
-        daily_data_1y: newDailyData
-      };
+      return { ...stock, livePrice, liveChange, daily_data_1y: newDailyData };
     });
   }, [baseTopMovers, realTimeData]);
 
@@ -176,7 +163,6 @@ export default function HomeScreen() {
                           return info[lang] || info.en;
                         })()}
                       </Text>
-                      {/* 大字报价区 */}
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
                         <Text style={[styles.livePriceText, { color: isUp ? '#30D158' : '#FF453A' }]}>
                           ¥{stock.livePrice?.toLocaleString()}
@@ -206,8 +192,8 @@ export default function HomeScreen() {
                         timeZoneMode={timeZoneMode}
                         onTimeZoneChange={setTimeZoneMode}
                         marketStatus={marketStatus}
-                        isRefreshing={marketLoading} // S3 正在请求时，触发内部加载动画
-                        onRefresh={refetchLive}      // 点击刷新按钮直接拉取 S3
+                        isRefreshing={marketLoading}
+                        onRefresh={refetchLive}
                       />
                     ) : (
                       <ActivityIndicator size="small" color={colors.textSecondary} />
