@@ -1,64 +1,71 @@
-// src/context/user-context.tsx
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Session } from '@supabase/supabase-js';
 
 interface UserContextType {
   isLoggedIn: boolean;
   isPremium: boolean;
+  username: string;
   favorites: string[];
-  session: Session | null;
-  toggleFavorite: (ticker: string) => void;
+  login: () => void;
   logout: () => void;
+  togglePremium: () => void;
+  toggleFavorite: (ticker: string) => boolean;
+  updateUsername: (name: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  // 为了测试，默认开启高级权限。后续可以根据 session.user 的 metadata 判断
-  const [isPremium, setIsPremium] = useState<boolean>(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isPremium, setIsPremium] = useState(false);
+  const [username, setUsername] = useState('WhaleHunter_99');
+  const [favorites, setFavorites] = useState<string[]>(['9983.T']);
 
+  // 🌟 监听 Supabase 登录状态
   useEffect(() => {
-    // 1. 获取初始会话
+    if (!supabase) return; // 如果还没配置账号，跳过
+    
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+      if (session) setIsLoggedIn(true);
     });
 
-    // 2. 监听登录状态改变 (登录、登出、Token 刷新)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+      setIsLoggedIn(!!session);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const toggleFavorite = (ticker: string) => {
-    setFavorites(prev => 
+  const login = () => setIsLoggedIn(true);
+  
+  const logout = async () => {
+    setIsLoggedIn(false);
+    setIsPremium(false);
+    setFavorites([]);
+    if (supabase) await supabase.auth.signOut();
+  };
+  
+  const togglePremium = () => setIsPremium(!isPremium);
+
+  const toggleFavorite = (ticker: string): boolean => {
+    if (!isPremium) return false;
+    setFavorites(prev =>
       prev.includes(ticker) ? prev.filter(t => t !== ticker) : [...prev, ticker]
     );
-    // TODO: 这里后续可以加上请求 FastAPI 接口同步到数据库的逻辑
+    return true;
   };
 
-  const logout = async () => {
-    await supabase.auth.signOut();
-  };
+  const updateUsername = (name: string) => setUsername(name);
 
-  const value = {
-    isLoggedIn: !!session,
-    isPremium,
-    favorites,
-    session,
-    toggleFavorite,
-    logout
-  };
-
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+  return (
+    <UserContext.Provider value={{ isLoggedIn, isPremium, username, favorites, login, logout, togglePremium, toggleFavorite, updateUsername }}>
+      {children}
+    </UserContext.Provider>
+  );
 }
 
-export const useAppUser = () => {
+export function useAppUser() {
   const context = useContext(UserContext);
-  if (!context) throw new Error('useAppUser must be used within a UserProvider');
+  if (!context) throw new Error('useAppUser must be used within UserProvider');
   return context;
-};
+}
