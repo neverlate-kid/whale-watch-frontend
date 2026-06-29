@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 
 interface UserContextType {
   isLoggedIn: boolean;
@@ -87,7 +88,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setFavorites(newFavorites);
 
     // 🌟 发送给受保护的 FastAPI 后端 (降级模式下静默失败，不影响前端 UI)
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://127.0.0.1:8000';
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL || (Platform.OS === 'android' ? 'http://10.0.2.2:8000' : 'http://127.0.0.1:8000');
     authFetch(`${baseUrl}/api/v1/user/favorites`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
