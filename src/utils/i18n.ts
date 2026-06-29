@@ -125,6 +125,11 @@ const resources = {
       registerSuccessTitle: "注册成功",
       registerSuccessMsg: "请查看您的邮箱以验证账号。",
       oauthFailedTitle: "登录失败",
+      changePassword: "修改密码",
+      newPassword: "新密码",
+      confirmNewPassword: "确认新密码",
+      passwordUpdated: "密码修改成功",
+      passwordUpdateFailed: "密码修改失败",
     }
   },
   en: {
@@ -242,6 +247,11 @@ const resources = {
       registerSuccessTitle: "Success",
       registerSuccessMsg: "Please check your email to verify your account.",
       oauthFailedTitle: "Login Failed",
+      changePassword: "Change Password",
+      newPassword: "New Password",
+      confirmNewPassword: "Confirm New Password",
+      passwordUpdated: "Password updated successfully.",
+      passwordUpdateFailed: "Failed to update password.",
     }
   },
   ja: {
@@ -359,6 +369,11 @@ const resources = {
       registerSuccessTitle: "登録成功",
       registerSuccessMsg: "メールを確認してアカウントを認証してください。",
       oauthFailedTitle: "ログイン失敗",
+      changePassword: "パスワードを変更",
+      newPassword: "新しいパスワード",
+      confirmNewPassword: "新しいパスワード（確認）",
+      passwordUpdated: "パスワードが正常に変更されました。",
+      passwordUpdateFailed: "パスワードの変更に失敗しました。",
     }
   },
   ko: {
@@ -476,6 +491,11 @@ const resources = {
       registerSuccessTitle: "가입 성공",
       registerSuccessMsg: "이메일을 확인하여 계정을 인증해 주세요.",
       oauthFailedTitle: "로그인 실패",
+      changePassword: "비밀번호 변경",
+      newPassword: "새 비밀번호",
+      confirmNewPassword: "새 비밀번호 확인",
+      passwordUpdated: "비밀번호가 성공적으로 변경되었습니다.",
+      passwordUpdateFailed: "비밀번호 변경에 실패했습니다.",
     }
   }
 };

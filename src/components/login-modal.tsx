@@ -62,19 +62,32 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
   // 🌟 邮箱密码登录 / 注册
   const handleLoginSubmit = async () => {
     if (!emailInput.includes('@')) {
+      // ✅ 纯净调用，去掉硬编码中文
       Alert.alert(t('errorTitle'), t('invalidEmail'));
       return;
     }
 
     if (isRegisterMode && !validatePassword()) return; 
 
-    if (!supabase) return; // 正式环境：没配云端就直接返回
+    if (!supabase) return;
 
     setLoading(true);
     try {
       if (isRegisterMode) {
-        const { error } = await supabase.auth.signUp({ email: emailInput, password: passwordInput });
+        // 🎲 生成随机初始用户名 (例如: Whale_58392)
+        const randomUsername = `Whale_${Math.floor(Math.random() * 90000) + 10000}`;
+        
+        const { error } = await supabase.auth.signUp({ 
+          email: emailInput, 
+          password: passwordInput,
+          options: {
+            data: {
+              username: randomUsername // 将随机用户名注册进数据库
+            }
+          }
+        });
         if (error) throw error;
+        // ✅ 纯净调用，去掉硬编码中文
         Alert.alert(t('registerSuccessTitle'), t('registerSuccessMsg'));
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: emailInput, password: passwordInput });
@@ -82,6 +95,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
         resetStateAndClose();
       }
     } catch (error: any) {
+      // ✅ 纯净调用，去掉硬编码中文
       Alert.alert(t('errorTitle'), error.message);
     } finally {
       setLoading(false);
@@ -106,6 +120,7 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
          resetStateAndClose();
       }
     } catch (error: any) {
+      // ✅ 纯净调用，去掉硬编码中文
       Alert.alert(t('oauthFailedTitle'), error.message);
     } finally {
       setLoading(false);

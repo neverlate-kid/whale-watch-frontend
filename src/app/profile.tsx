@@ -3,77 +3,104 @@ import { useAppUser } from '@/context/user-context';
 import { useRouter } from 'expo-router';
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, ActivityIndicator } from 'react-native';
 import dayjs from 'dayjs';
 import Svg, { Path } from 'react-native-svg';
+import { supabase } from '@/lib/supabase'; // 引入 supabase
 
 export default function ProfileScreen() {
     const { t } = useTranslation();
     const { colors, theme } = useAppTheme();
-    // 🌟 引入 session，用于获取真实的云端用户数据
     const { username, isPremium, togglePremium, updateUsername, session } = useAppUser(); 
     const router = useRouter();
 
+    // 用户名编辑状态
     const [inputName, setInputName] = useState(username);
-    const [isEditing, setIsEditing] = useState(false);
+    const [isEditingName, setIsEditingName] = useState(false);
 
-    // 🌟 正式版：从 Supabase session 获取真实的账号创建时间
+    // 🌟 新增：密码修改状态
+    const [isEditingPassword, setIsEditingPassword] = useState(false);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+    const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
+
     const joinDate = useMemo(() => {
         if (session?.user?.created_at) {
             return dayjs(session.user.created_at).format('YYYY-MM-DD');
         }
-        return 'N/A'; // 获取失败时的兜底
+        return 'N/A';
     }, [session]);
 
-    // 🌟 正式版：根据 Premium 状态动态计算到期日，或显示暂无
     const expiryDate = isPremium ? dayjs().add(1, 'year').format('YYYY-MM-DD') : t('notSubscribed');
 
-    const handleSave = () => {
+    const handleSaveName = () => {
         if (!inputName.trim()) {
-            Alert.alert(t('errorTitle'), t('usernameEmptyError')); 
+            Alert.alert(t('errorTitle', '提示'), t('usernameEmptyError', '用户名不能为空')); 
             return;
         }
         updateUsername(inputName);
-        setIsEditing(false);
+        setIsEditingName(false);
     };
 
-    const handlePasswordChangePress = () => {
-        Alert.alert(t('noticeTitle'), t('featureComingSoon'));
+    // 🌟 新增：复用严格的密码校验
+    const validatePassword = (): boolean => {
+        if (newPassword.length < 8) {
+            Alert.alert(t('errorTitle'), t('passwordTooShort')); return false;
+        }
+        if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword)) {
+            Alert.alert(t('errorTitle'), t('passwordNeedCase')); return false;
+        }
+        if (!/[0-9]/.test(newPassword)) {
+            Alert.alert(t('errorTitle'), t('passwordNeedNumber')); return false;
+        }
+        if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+            Alert.alert(t('errorTitle'), t('passwordNeedSpecial')); return false;
+        }
+        if (newPassword !== confirmNewPassword) {
+            Alert.alert(t('errorTitle'), t('passwordMismatch')); return false;
+        }
+        return true;
+    };
+
+    // 🌟 新增：提交密码修改到 Supabase
+    const handleSavePassword = async () => {
+        if (!validatePassword()) return;
+        if (!supabase) return;
+
+        setIsUpdatingPwd(true);
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
+            if (error) throw error;
+            
+            Alert.alert(t('noticeTitle', '提示'), t('passwordUpdated', '密码修改成功'));
+            setIsEditingPassword(false);
+            setNewPassword('');
+            setConfirmNewPassword('');
+        } catch (error: any) {
+            Alert.alert(t('errorTitle', '提示'), error.message || t('passwordUpdateFailed'));
+        } finally {
+            setIsUpdatingPwd(false);
+        }
     };
 
     const handleUpgradePress = () => {
-        Alert.alert(
-            t('iapSimulateTitle'),
-            t('iapSimulateMsg'),
-            [
-                { text: t('cancelBtn'), style: 'cancel' },
-                { 
-                    text: t('iapPayBtn'), 
-                    onPress: () => {
-                        togglePremium();
-                        Alert.alert(t('iapSuccessTitle'), t('iapSuccessMsg'));
-                    }
-                }
-            ]
-        );
+        Alert.alert(t('iapSimulateTitle'), t('iapSimulateMsg'), [
+            { text: t('cancelBtn', '取消'), style: 'cancel' },
+            { 
+                text: t('iapPayBtn'), 
+                onPress: () => { togglePremium(); Alert.alert(t('iapSuccessTitle'), t('iapSuccessMsg')); }
+            }
+        ]);
     };
 
     const handleCancelSubscription = () => {
-        Alert.alert(
-            t('cancelConfirmTitle'),
-            t('cancelConfirmMessage'),
-            [
-                { text: t('cancelBtn'), style: 'cancel' },
-                { 
-                    text: t('confirmBtn'), 
-                    style: 'destructive',
-                    onPress: () => {
-                        togglePremium();
-                        Alert.alert(t('cancelSuccessTitle'), t('cancelSuccess'));
-                    }
-                }
-            ]
-        );
+        Alert.alert(t('cancelConfirmTitle'), t('cancelConfirmMessage'), [
+            { text: t('cancelBtn', '取消'), style: 'cancel' },
+            { 
+                text: t('confirmBtn'), style: 'destructive',
+                onPress: () => { togglePremium(); Alert.alert(t('cancelSuccessTitle'), t('cancelSuccess')); }
+            }
+        ]);
     };
 
     return (
@@ -96,10 +123,12 @@ export default function ProfileScreen() {
             <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
                 
                 <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    
+                    {/* 用户名栏 */}
                     <View style={styles.settingRow}>
                         <View style={{ flex: 1 }}>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>{t('username')}</Text>
-                            {isEditing ? (
+                            {isEditingName ? (
                                 <TextInput
                                     style={[styles.input, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background }]}
                                     value={inputName}
@@ -110,42 +139,93 @@ export default function ProfileScreen() {
                                 <Text style={[styles.nameText, { color: colors.textPrimary }]}>{username}</Text>
                             )}
                         </View>
-                        
                         <TouchableOpacity 
-                            style={[styles.miniBtn, { backgroundColor: isEditing ? colors.textPrimary : colors.background, borderColor: colors.border, borderWidth: isEditing ? 0 : 1 }]} 
-                            onPress={isEditing ? handleSave : () => setIsEditing(true)}
+                            style={[styles.miniBtn, { backgroundColor: isEditingName ? colors.textPrimary : colors.background, borderColor: colors.border, borderWidth: isEditingName ? 0 : 1 }]} 
+                            onPress={isEditingName ? handleSaveName : () => setIsEditingName(true)}
                         >
-                            <Text style={{ color: isEditing ? colors.background : colors.textPrimary, fontSize: 11, fontWeight: '700' }}>
-                                {isEditing ? t('saveProfile') : t('editProfile')}
+                            <Text style={{ color: isEditingName ? colors.background : colors.textPrimary, fontSize: 11, fontWeight: '700' }}>
+                                {isEditingName ? t('saveProfile', '保存') : t('editProfile', '编辑')}
                             </Text>
                         </TouchableOpacity>
                     </View>
 
                     <View style={[styles.innerDivider, { backgroundColor: colors.border }]} />
 
+                    {/* 邮箱栏 */}
                     <View style={styles.settingRow}>
                         <View>
                             <Text style={[styles.label, { color: colors.textSecondary }]}>{t('emailLabel')}</Text>
-                            {/* 🌟 核心：渲染真实的云端用户邮箱 */}
                             <Text style={[styles.staticValueText, { color: colors.textSecondary }]}>
-                                {session?.user?.email || t('notLoggedIn')}
+                                {session?.user?.email || t('notLoggedIn', '未登录')}
                             </Text>
                         </View>
                     </View>
 
                     <View style={[styles.innerDivider, { backgroundColor: colors.border }]} />
 
-                    <TouchableOpacity style={[styles.settingRow, { paddingVertical: 4 }]} onPress={handlePasswordChangePress} activeOpacity={0.6}>
-                        <View>
-                            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('passwordLabel')}</Text>
-                            <Text style={[styles.staticValueText, { color: colors.textPrimary }]}>••••••••••••</Text>
+                    {/* 🌟 核心新增：密码修改折叠面板 */}
+                    <View style={{ gap: 8 }}>
+                        <View style={styles.settingRow}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.label, { color: colors.textSecondary }]}>{t('passwordLabel')}</Text>
+                                {!isEditingPassword && <Text style={[styles.staticValueText, { color: colors.textPrimary }]}>••••••••••••</Text>}
+                            </View>
+                            {!isEditingPassword && (
+                                <TouchableOpacity 
+                                    style={[styles.miniBtn, { backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }]} 
+                                    onPress={() => setIsEditingPassword(true)}
+                                >
+                                    <Text style={{ color: colors.textPrimary, fontSize: 11, fontWeight: '700' }}>
+                                        {t('changePassword', '修改密码')}
+                                    </Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
-                        <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <Path d="M9 5l7 7-7 7" stroke={colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </Svg>
-                    </TouchableOpacity>
+
+                        {isEditingPassword && (
+                            <View style={{ gap: 10, marginTop: 4 }}>
+                                <TextInput
+                                    style={[styles.input, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background }]}
+                                    placeholder={t('newPassword', '新密码')}
+                                    placeholderTextColor={colors.textSecondary}
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                    secureTextEntry
+                                    editable={!isUpdatingPwd}
+                                />
+                                <TextInput
+                                    style={[styles.input, { color: colors.textPrimary, borderColor: colors.border, backgroundColor: colors.background }]}
+                                    placeholder={t('confirmNewPassword', '确认新密码')}
+                                    placeholderTextColor={colors.textSecondary}
+                                    value={confirmNewPassword}
+                                    onChangeText={setConfirmNewPassword}
+                                    secureTextEntry
+                                    editable={!isUpdatingPwd}
+                                />
+                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                                    <TouchableOpacity 
+                                        style={[styles.actionBtn, { flex: 1, backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1 }]} 
+                                        onPress={() => { setIsEditingPassword(false); setNewPassword(''); setConfirmNewPassword(''); }}
+                                        disabled={isUpdatingPwd}
+                                    >
+                                        <Text style={{ color: colors.textSecondary, fontSize: 12, fontWeight: '700' }}>{t('cancelBtn', '取消')}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={[styles.actionBtn, { flex: 1, backgroundColor: colors.textPrimary }]} 
+                                        onPress={handleSavePassword}
+                                        disabled={isUpdatingPwd}
+                                    >
+                                        {isUpdatingPwd ? <ActivityIndicator size="small" color={colors.background} /> : (
+                                            <Text style={{ color: colors.background, fontSize: 12, fontWeight: '700' }}>{t('saveProfile', '保存')}</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                    </View>
                 </View>
 
+                {/* 订阅管理区域保持不变 */}
                 {isPremium ? (
                     <View style={[styles.premiumManagerCard, { backgroundColor: colors.card, borderColor: '#D4A373' }]}>
                         <View style={styles.managerHeader}>
@@ -155,16 +235,13 @@ export default function ProfileScreen() {
                         <View style={styles.infoMetaRow}>
                             <View style={styles.metaColumn}>
                                 <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>{t('premiumJoinDate')}</Text>
-                                {/* 🌟 核心：渲染真实的注册时间 */}
                                 <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{joinDate}</Text>
                             </View>
                             <View style={styles.metaColumn}>
                                 <Text style={[styles.metaLabel, { color: colors.textSecondary }]}>{t('premiumExpiryDate')}</Text>
-                                {/* 🌟 核心：渲染真实的到期日 */}
                                 <Text style={[styles.metaValue, { color: colors.textPrimary }]}>{expiryDate}</Text>
                             </View>
                         </View>
-
                         <View style={{ gap: 8 }}>
                             <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={handleCancelSubscription} activeOpacity={0.7}>
                                 <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>{t('cancelSubscription')}</Text>
@@ -196,10 +273,11 @@ const styles = StyleSheet.create({
     innerDivider: { height: 1, marginVertical: 12 },
     settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     label: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3, marginBottom: 4 },
-    input: { height: 32, borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, fontSize: 14, fontWeight: '600', marginTop: 2 },
+    input: { height: 36, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontSize: 14, fontWeight: '600', marginTop: 2 },
     nameText: { fontSize: 15, fontWeight: '800' },
     staticValueText: { fontSize: 14, fontWeight: '600' },
     miniBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
+    actionBtn: { height: 36, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
     premiumCapsule: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 14, padding: 16, borderWidth: 1, marginTop: 2 },
     premiumLeft: { flex: 1, gap: 2, paddingRight: 10 },
     premiumTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 0.5 },
