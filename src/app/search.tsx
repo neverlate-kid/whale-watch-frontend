@@ -1,6 +1,7 @@
 import { isMatchSearch, NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
 import { useMarketData } from '@/hooks/useMarketData';
+import { getMarketStatus } from '@/utils/market';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +20,7 @@ export default function SearchScreen() {
   const [isLoading, setIsLoading] = useState(true);
 
   // 🌟 S3 数据自动轮询
-  const { data: realTimeData } = useMarketData(60000);
+  const { data: realTimeData, error: marketError } = useMarketData(60000);
 
   useEffect(() => {
     const fetchAndFilterStocks = async () => {
@@ -92,6 +93,13 @@ export default function SearchScreen() {
         <Text style={[styles.title, { color: colors.textPrimary }]}>
           {t('searchPrefix')} <Text style={{ fontWeight: '900' }}>{searchQuery}</Text>
         </Text>
+
+        {/* 🌟 新增断线提示 */}
+        {marketError && getMarketStatus() === 'open' && (
+          <View style={{ backgroundColor: '#FF453A15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#FF453A30', marginLeft: 'auto' }}>
+            <Text style={{ color: '#FF453A', fontSize: 10, fontWeight: '800' }}>⚠️ {t('liveDataError')}</Text>
+          </View>
+        )}
       </View>
 
       {/* 结果展示列表 */}

@@ -132,6 +132,7 @@ const resources = {
       passwordUpdateFailed: "密码修改失败",
       recentNews: "近期相关资讯",
       noNewsFound: "暂无近期资讯",
+      liveDataError: "实时数据断开，正在重试...",
     }
   },
   en: {
@@ -256,6 +257,7 @@ const resources = {
       passwordUpdateFailed: "Failed to update password.",
       recentNews: "Recent News",
       noNewsFound: "No recent news found.",
+      liveDataError: "Live data disconnected, retrying...",
     }
   },
   ja: {
@@ -380,6 +382,7 @@ const resources = {
       passwordUpdateFailed: "パスワードの変更に失敗しました。",
       recentNews: "関連ニュース",
       noNewsFound: "最近のニュースはありません",
+      liveDataError: "ライブデータ切断、再試行中...",
     }
   },
   ko: {
@@ -504,6 +507,7 @@ const resources = {
       passwordUpdateFailed: "비밀번호 변경에 실패했습니다.",
       recentNews: "최근 관련 뉴스",
       noNewsFound: "최근 뉴스가 없습니다",
+      liveDataError: "실시간 데이터 연결 끊김, 재시도 중...",
     }
   }
 };

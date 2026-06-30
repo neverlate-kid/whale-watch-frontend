@@ -36,8 +36,8 @@ export default function HomeScreen() {
   const hasAccess = isLoggedIn && isPremium;
   const marketStatus = getMarketStatus();
 
-  // 🌟 挂载全局 S3 数据
-  const { data: realTimeData, loading: marketLoading, refetch: refetchLive } = useMarketData(60000);
+  // 🌟 从 hook 中额外解构出 error 状态，命名为 marketError
+  const { data: realTimeData, loading: marketLoading, error: marketError, refetch: refetchLive } = useMarketData(60000);
 
   useEffect(() => {
     const fetchStocks = async () => {
@@ -156,6 +156,21 @@ export default function HomeScreen() {
           <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>{t('brand')}</Text>
           <Text style={[styles.dateBadge, { color: colors.textSecondary }]}>📅 {todayDate}</Text>
         </View>
+        {/* 🌟 断线弱提示：仅在开盘时间且请求 S3 失败时渲染 */}
+        {marketError && marketStatus === 'open' && (
+          <View style={{
+            backgroundColor: '#FF453A15',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: '#FF453A30'
+          }}>
+            <Text style={{ color: '#FF453A', fontSize: 10, fontWeight: '800' }}>
+              ⚠️ {t('liveDataError')}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.carouselContainer}>

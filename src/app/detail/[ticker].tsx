@@ -1,8 +1,8 @@
+import { NewsItem, RecentNews } from '@/components/recent-news'; // 🌟 引入独立的新闻组件
 import { StockChart } from '@/components/stock-chart';
-import { RecentNews, NewsItem } from '@/components/recent-news'; // 🌟 引入独立的新闻组件
 import { NIKKEI_225_DICT } from '@/constants/nikkei-dict';
 import { useAppTheme } from '@/context/theme-context';
-import { useMarketData } from '@/hooks/useMarketData'; 
+import { useMarketData } from '@/hooks/useMarketData';
 import { getMarketStatus } from '@/utils/market';
 import dayjs from 'dayjs';
 import timezone from 'dayjs/plugin/timezone';
@@ -24,19 +24,19 @@ export default function DetailScreen() {
 
   // 状态管理
   const [stock, setStock] = useState<any>(null);
-  const [news, setNews] = useState<NewsItem[]>([]); 
+  const [news, setNews] = useState<NewsItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [timeZoneMode, setTimeZoneMode] = useState<'JST' | 'local'>('JST');
 
   // S3 实时数据 Hook
-  const { data: realTimeData, loading: isRefreshingLive, refetch: refetchLive } = useMarketData(60000);
+  const { data: realTimeData, loading: isRefreshingLive, error: marketError, refetch: refetchLive } = useMarketData(60000);
 
   // 1. 获取图表历史数据 + 新闻资讯
   useEffect(() => {
     const fetchDetailAndNews = async () => {
       const tickerStr = typeof ticker === 'string' ? ticker : ticker?.[0];
       if (!tickerStr) return;
-      
+
       setIsLoading(true);
       try {
         const baseUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -48,10 +48,10 @@ export default function DetailScreen() {
 
         // 获取当前 App 的语言前缀 (zh, en, ja, ko)
         const currentLang = i18n.language.substring(0, 2);
-        
+
         const [detailRes, newsRes] = await Promise.all([
           fetch(`${baseUrl}/api/v1/stocks/${tickerStr}`),
-          fetch(`${baseUrl}/api/v1/stocks/${tickerStr}/news?lang=${currentLang}`) 
+          fetch(`${baseUrl}/api/v1/stocks/${tickerStr}/news?lang=${currentLang}`)
         ]);
 
         const detailJson = await detailRes.json();
@@ -94,7 +94,7 @@ export default function DetailScreen() {
 
           if (isLastPointToday) newDataArray[newDataArray.length - 1] = newPoint;
           else newDataArray.push(newPoint);
-          
+
           updatedStock.daily_data_1y = newDataArray;
         }
         return updatedStock;
@@ -104,7 +104,7 @@ export default function DetailScreen() {
 
   const handleRefreshLivePrice = async () => {
     if (getMarketStatus() === 'closed') return;
-    refetchLive(); 
+    refetchLive();
   };
 
   if (isLoading) {
@@ -139,6 +139,13 @@ export default function DetailScreen() {
               <Path d="M15 19L8 12L15 5" stroke={colors.textPrimary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
+
+          {/* 🌟 新增断线提示 */}
+          {marketError && getMarketStatus() === 'open' && (
+            <View style={{ backgroundColor: '#FF453A15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#FF453A30' }}>
+              <Text style={{ color: '#FF453A', fontSize: 10, fontWeight: '800' }}>⚠️ {t('liveDataError')}</Text>
+            </View>
+          )}
         </View>
 
         {/* 乐高模块 1：图表组件 */}
@@ -180,7 +187,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginVertical: 8, gap: 15 },
   backCapsule: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 1, elevation: 1 },
   scrollBody: { paddingBottom: 40 },
-  
+
   // 图表区域样式
   card: { borderRadius: 14, padding: 18, borderWidth: 1, marginHorizontal: 20 },
   tickerCode: { fontSize: 20, fontWeight: '900', fontFamily: 'monospace', marginBottom: 10 },
