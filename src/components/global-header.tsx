@@ -3,9 +3,12 @@ import { useAppUser } from '@/context/user-context';
 import { useRouter } from 'expo-router';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import React, { StyleSheet, Text, TouchableOpacity, View, Animated, Alert, TextInput } from 'react-native';
+// 👉 新增 Modal, TouchableWithoutFeedback
+import React, { StyleSheet, Text, TouchableOpacity, View, Animated, Alert, TextInput, Modal, TouchableWithoutFeedback } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AntDesign, MaterialIcons } from '@expo/vector-icons'; 
+// 👉 新增 Expo Notifications
+import * as Notifications from 'expo-notifications';
 
 import { LoginModal } from '@/components/login-modal';
 
@@ -19,18 +22,20 @@ const languages = [
 export default function GlobalHeader() {
   const { t, i18n } = useTranslation();
   const { theme, toggleTheme, colors } = useAppTheme();
-  const { isPremium, isLoggedIn } = useAppUser();
+  // 👉 额外解构出 session 和 logout
+  const { isPremium, isLoggedIn, session, logout } = useAppUser();
   const router = useRouter();
   
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loginModalVisible, setLoginModalVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(''); // 👉 搜索状态
+  const [searchQuery, setSearchQuery] = useState(''); 
+  // 👉 新增：控制头像下拉菜单的状态
+  const [avatarMenuVisible, setAvatarMenuVisible] = useState(false);
 
   const insets = useSafeAreaInsets();
   const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
   const toggleAnim = useRef(new Animated.Value(theme === 'dark' ? 1 : 0)).current;
 
-  // 👉 搜索跳转逻辑
   const handleSearch = () => {
     if (searchQuery.trim().length > 0) {
       router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
@@ -51,11 +56,37 @@ export default function GlobalHeader() {
     outputRange: [2, 28],
   });
 
+  // 👉 修改：已登录时不再直接跳转，而是打开下拉菜单
   const handleAvatarPress = () => {
     if (isLoggedIn) {
-      router.push('/profile');
+      setAvatarMenuVisible(true);
     } else {
       setLoginModalVisible(true);
+    }
+  };
+
+  // 👉 新增：安全退出登录逻辑
+  const handleLogout = async () => {
+    try {
+      const tokenData = await Notifications.getExpoPushTokenAsync({
+        projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID
+      });
+      const pushToken = tokenData.data;
+      const accessToken = session?.access_token;
+      
+      if (pushToken && accessToken) {
+        const baseUrl = process.env.EXPO_PUBLIC_API_URL;
+        await fetch(`${baseUrl}/api/v1/user/device/${pushToken}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('注销推送设备失败:', e);
+    } finally {
+      logout();
     }
   };
 
@@ -85,7 +116,6 @@ export default function GlobalHeader() {
         }
       ]}
     >
-      {/* 第一行：功能控制区 */}
       <View style={styles.topRow}>
         <View style={styles.leftRow}>
           <TouchableOpacity 
@@ -157,7 +187,6 @@ export default function GlobalHeader() {
         </View>
       </View>
 
-      {/* 👉 第二行：搜索框 */}
       <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={{ fontSize: 16, marginRight: 8, opacity: 0.6 }}>🔍</Text>
         <TextInput
@@ -175,6 +204,46 @@ export default function GlobalHeader() {
         visible={loginModalVisible} 
         onClose={() => setLoginModalVisible(false)} 
       />
+
+      {/* 👉 新增：头像专用下拉菜单 */}
+      <Modal visible={avatarMenuVisible} transparent={true} animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setAvatarMenuVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[
+                styles.avatarDropdownMenu,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  top: Math.max(insets.top, 12) + 48, // 动态适配安全区，悬浮在头像正下方
+                }
+              ]}>
+                
+                <TouchableOpacity
+                  style={[styles.avatarDropdownItem, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
+                  onPress={() => {
+                    setAvatarMenuVisible(false);
+                    router.push('/profile');
+                  }}
+                >
+                  <Text style={[styles.avatarDropdownText, { color: colors.textPrimary }]}>👤 {t('profile')}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={styles.avatarDropdownItem}
+                  onPress={async () => {
+                    setAvatarMenuVisible(false);
+                    await handleLogout();
+                  }}
+                >
+                  <Text style={[styles.avatarDropdownText, { color: '#FF453A' }]}>🚪 {t('logout')}</Text>
+                </TouchableOpacity>
+
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -199,4 +268,30 @@ const styles = StyleSheet.create({
   avatarBtn: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   crownBadge: { position: 'absolute', bottom: -3, right: -3, width: 15, height: 15, borderRadius: 7.5, borderWidth: 1, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1, elevation: 2 },
   crownIconText: { fontSize: 8, textAlign: 'center', lineHeight: 10 },
+  
+  // 👉 新增：头像下拉菜单专属样式
+  modalOverlay: { flex: 1 },
+  avatarDropdownMenu: {
+    position: 'absolute',
+    right: 16,
+    width: 140,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  avatarDropdownItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarDropdownText: {
+    fontSize: 15,
+    fontWeight: '600',
+  }
 });
