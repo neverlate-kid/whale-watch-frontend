@@ -142,7 +142,7 @@ export default function DetailScreen() {
 
           {/* 🌟 新增断线提示 */}
           {marketError && getMarketStatus() === 'open' && (
-            <View style={{ backgroundColor: '#FF453A15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#FF453A30' }}>
+            <View style={{ backgroundColor: '#FF453A15', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#FF453A30', marginLeft: 'auto' }}>
               <Text style={{ color: '#FF453A', fontSize: 10, fontWeight: '800' }}>⚠️ {t('liveDataError')}</Text>
             </View>
           )}
